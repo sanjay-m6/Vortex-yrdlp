@@ -1,0 +1,39 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Tauri & Rust build artifacts
+src-tauri/target/
+src-tauri/gen/schemas
+
+# Local Databases and temporary probes
+*.db
+*.db-shm
+*.db-wal
+*.tmp
+
+# Local binaries and downloads
+bin/
+*.exe

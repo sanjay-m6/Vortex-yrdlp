@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/ytdlpicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vortex — Modern Media Downloader</title>
+    <script>
+      (function() {
+        try {
+          var raw = localStorage.getItem('vortex_settings') || localStorage.getItem('mediadl_phase1_settings');
+          var theme = raw ? JSON.parse(raw).theme : 'system';
+          var isDark = theme === 'dark' || (theme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+            document.documentElement.style.colorScheme = 'dark';
+          } else {
+            document.documentElement.classList.remove('dark');
+            document.documentElement.style.colorScheme = 'light';
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body class="overflow-hidden">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
