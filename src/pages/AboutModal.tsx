@@ -36,7 +36,7 @@ export const AboutModal: React.FC = () => {
           />
           <div>
             <h3 className="text-lg font-bold text-white">Vortex Desktop</h3>
-            <p className="text-xs text-slate-400">Version 1.0.0 (Production Release)</p>
+            <p className="text-xs text-slate-400">Version 1.1.0 (Production Release)</p>
             <p className="text-xs text-sky-400 font-medium mt-0.5">High Performance Media Ingestion</p>
           </div>
         </div>

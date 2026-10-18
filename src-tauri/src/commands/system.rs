@@ -90,8 +90,10 @@ pub async fn reveal_in_explorer(path: String) -> Result<(), String> {
 
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
+#[cfg(target_os = "windows")]
 use std::io::Cursor;
 use tauri::Emitter;
+#[cfg(target_os = "windows")]
 use zip::ZipArchive;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -157,7 +159,7 @@ pub async fn download_ytdlp_internal(app: Option<&tauri::AppHandle>) -> Result<S
     }
 
     let client = reqwest::Client::builder()
-        .user_agent("Vortex/1.0.0")
+        .user_agent("Vortex/1.1.0")
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
@@ -258,32 +260,32 @@ pub async fn download_ytdlp_internal(app: Option<&tauri::AppHandle>) -> Result<S
 }
 
 pub async fn download_ffmpeg_internal(app: Option<&tauri::AppHandle>) -> Result<String, String> {
-    let target_dir = crate::engine::resolver::ToolResolver::get_managed_tools_dir();
-    if !target_dir.exists() {
-        let _ = std::fs::create_dir_all(&target_dir);
-    }
-
-    if let Some(app_handle) = app {
-        let _ = app_handle.emit(
-            "tool_download_progress",
-            ToolDownloadProgressPayload {
-                tool: "FFmpeg".to_string(),
-                stage: "starting".to_string(),
-                percentage: 0.0,
-                downloaded_bytes: 0,
-                total_bytes: None,
-                message: "Connecting to FFmpeg distribution mirror...".to_string(),
-            },
-        );
-    }
-
-    let client = reqwest::Client::builder()
-        .user_agent("Vortex/1.0.0")
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-
     #[cfg(target_os = "windows")]
     {
+        let target_dir = crate::engine::resolver::ToolResolver::get_managed_tools_dir();
+        if !target_dir.exists() {
+            let _ = std::fs::create_dir_all(&target_dir);
+        }
+
+        if let Some(app_handle) = app {
+            let _ = app_handle.emit(
+                "tool_download_progress",
+                ToolDownloadProgressPayload {
+                    tool: "FFmpeg".to_string(),
+                    stage: "starting".to_string(),
+                    percentage: 0.0,
+                    downloaded_bytes: 0,
+                    total_bytes: None,
+                    message: "Connecting to FFmpeg distribution mirror...".to_string(),
+                },
+            );
+        }
+
+        let client = reqwest::Client::builder()
+            .user_agent("Vortex/1.1.0")
+            .build()
+            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
         let download_urls = [
             "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip",
             "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
@@ -448,6 +450,7 @@ pub async fn download_ffmpeg_internal(app: Option<&tauri::AppHandle>) -> Result<
 
     #[cfg(not(target_os = "windows"))]
     {
+        let _ = app;
         Err("Automatic FFmpeg download is currently optimized for Windows. On Linux/macOS, install via package manager (sudo apt install ffmpeg / brew install ffmpeg).".to_string())
     }
 }

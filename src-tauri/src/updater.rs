@@ -62,13 +62,13 @@ pub async fn check_app_update() -> Result<AppUpdateInfo, String> {
     let current_version = env!("CARGO_PKG_VERSION").to_string();
 
     let client = reqwest::Client::builder()
-        .user_agent("Vortex-Desktop-Updater/1.0.0")
+        .user_agent(format!("Vortex-Desktop-Updater/{}", current_version))
         .timeout(std::time::Duration::from_secs(8))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     // Check official GitHub repository latest release
-    let url = "https://api.github.com/repos/sanjay-m6/Vortex-yrdlp/releases/latest";
+    let url = "https://api.github.com/repos/sanjay-m6/Vortex-ytdlp/releases/latest";
     let res = client.get(url).send().await;
 
     match res {
@@ -106,7 +106,7 @@ pub async fn check_app_update() -> Result<AppUpdateInfo, String> {
                 published_at: Some(chrono::Utc::now().to_rfc3339()),
                 download_url: None,
                 signature_verified: false,
-                status_message: "Vortex is up to date (Production v1.0.0).".to_string(),
+                status_message: format!("Vortex is up to date (Production v{}).", current_version),
             })
         }
         Err(e) => {

@@ -131,7 +131,7 @@ export const About: React.FC = () => {
                 The high-performance, local-first media downloader & converter for Windows.
               </p>
               <span className="inline-block mt-2 text-[11px] font-mono font-medium px-2.5 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-                v1.0.0 (x64 Windows)
+                v1.1.0 (x64 Windows)
               </span>
             </div>
           </div>

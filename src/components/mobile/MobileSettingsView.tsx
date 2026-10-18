@@ -284,7 +284,7 @@ export const MobileSettingsView: React.FC = () => {
               MediaDL / Vortex
             </div>
             <div className="text-[10px] text-slate-400">
-              Version 1.0.0 • Mobile & Desktop
+              Version 1.1.0 • Mobile & Desktop
             </div>
             <div className="text-[10px] text-slate-500 font-mono">
               Apache License 2.0

@@ -34,7 +34,7 @@ use process::ProcessManager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     logging::init_logger();
-    logging::log_info("System", "Vortex v1.0.0 initializing...");
+    logging::log_info("System", "Vortex v1.1.0 initializing...");
 
     let app_data_dir = dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
