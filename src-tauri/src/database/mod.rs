@@ -422,6 +422,109 @@ pub fn fetch_all_downloads(conn: &Connection) -> Result<Vec<QueueItem>> {
     Ok(result)
 }
 
+pub fn fetch_download_by_id(conn: &Connection, id: &str) -> Result<Option<QueueItem>> {
+    let mut stmt = conn.prepare(
+        "SELECT
+            d.id, d.webpage_url, d.media_id, d.title, d.thumbnail_url,
+            d.format_selection, d.media_type, d.output_directory, d.output_filename,
+            d.status, d.priority, d.queue_position, d.created_at, d.updated_at,
+            d.started_at, d.completed_at, d.error_code, d.error_message,
+            d.downloaded_bytes, d.total_bytes, d.output_path,
+            (SELECT COUNT(*) FROM download_attempts a WHERE a.download_id = d.id) as attempts,
+            d.settings_snapshot, d.uploader, d.duration
+        FROM downloads d
+        WHERE d.id = ?1",
+    )?;
+
+    let mut rows = stmt.query(params![id])?;
+    if let Some(row) = rows.next()? {
+        let id: String = row.get(0)?;
+        let webpage_url: String = row.get(1)?;
+        let title: String = row.get(3)?;
+        let thumbnail: Option<String> = row.get(4)?;
+        let format_json: String = row.get(5)?;
+        let media_type_str: String = row.get(6)?;
+        let output_directory: String = row.get(7)?;
+        let output_filename: Option<String> = row.get(8)?;
+        let status_str: String = row.get(9)?;
+        let priority_str: String = row.get(10)?;
+        let queue_position: i64 = row.get(11)?;
+        let created_at: String = row.get(12)?;
+        let updated_at: String = row.get(13)?;
+        let started_at: Option<String> = row.get(14)?;
+        let completed_at: Option<String> = row.get(15)?;
+        let error_code: Option<String> = row.get(16)?;
+        let error_message: Option<String> = row.get(17)?;
+        let downloaded_bytes: i64 = row.get(18)?;
+        let total_bytes: Option<i64> = row.get(19)?;
+        let output_path: Option<String> = row.get(20)?;
+        let attempt_count: i64 = row.get(21)?;
+        let snapshot_json: Option<String> = row.get(22).ok();
+        let uploader: Option<String> = row.get(23).ok();
+        let duration: Option<f64> = row.get(24).ok();
+        let settings_snapshot: Option<crate::presets::model::DownloadSettingsSnapshot> =
+            snapshot_json
+                .as_deref()
+                .and_then(|s| serde_json::from_str(s).ok());
+        let preset_id = settings_snapshot.as_ref().map(|s| s.preset_id.clone());
+
+        let format_selection: FormatSelection =
+            serde_json::from_str(&format_json).unwrap_or(FormatSelection::Best);
+        let media_type = match media_type_str.as_str() {
+            "audio" => MediaType::Audio,
+            _ => MediaType::Video,
+        };
+
+        let status = match status_str.to_lowercase().as_str() {
+            "starting" => DownloadState::Starting,
+            "downloading" => DownloadState::Downloading,
+            "processing" => DownloadState::Processing,
+            "completed" => DownloadState::Completed,
+            "failed" => DownloadState::Failed,
+            "cancelling" => DownloadState::Cancelling,
+            "cancelled" => DownloadState::Cancelled,
+            _ => DownloadState::Queued,
+        };
+
+        let request = DownloadRequest {
+            task_id: Some(id.clone()),
+            webpage_url,
+            format_selection,
+            output_directory,
+            filename_template: output_filename,
+            media_type,
+            overwrite_policy: OverwritePolicy::Rename,
+            title: Some(title),
+            uploader,
+            thumbnail,
+            duration,
+            preset_id,
+            settings_snapshot,
+        };
+
+        Ok(Some(QueueItem {
+            id,
+            request,
+            status,
+            priority: QueuePriority::from_str(&priority_str),
+            queue_position: queue_position.max(0) as usize,
+            progress: None,
+            created_at,
+            updated_at,
+            started_at,
+            completed_at,
+            error_code,
+            error_message,
+            output_path,
+            downloaded_bytes: downloaded_bytes.max(0) as u64,
+            total_bytes: total_bytes.map(|b| b.max(0) as u64),
+            attempt_count: attempt_count.max(1) as u32,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
 pub fn delete_download(conn: &Connection, id: &str) -> Result<()> {
     conn.execute("DELETE FROM downloads WHERE id = ?1", params![id])?;
     Ok(())

@@ -82,6 +82,54 @@ fn test_validate_output_directory_valid_and_auto_create() {
     let _ = fs::remove_dir_all(&temp_dir);
 }
 
+#[test]
+fn test_validate_output_directory_resolves_downloads_keyword() {
+    let res = validate_output_directory("Downloads");
+    assert!(res.is_ok());
+    let path = res.unwrap();
+    assert!(path.is_absolute());
+    // Must never contain the Windows UNC extended-length prefix \\?\
+    let s = path.to_string_lossy();
+    assert!(
+        !s.starts_with(r"\\?\"),
+        "Path should not start with UNC prefix: {}",
+        s
+    );
+}
+
+#[test]
+fn test_validate_output_directory_resolves_relative_path_safely() {
+    let res = validate_output_directory("vortex_test_subfolder");
+    assert!(res.is_ok());
+    let path = res.unwrap();
+    assert!(path.is_absolute());
+    let s = path.to_string_lossy();
+    assert!(!s.starts_with(r"\\?\"));
+    // Clean up created test folder
+    let _ = fs::remove_dir_all(&path);
+}
+
+#[test]
+fn test_strip_unc_prefix() {
+    use std::path::PathBuf;
+    use vortex_lib::downloader::validation::strip_unc_prefix;
+
+    let p1 = PathBuf::from(r"\\?\C:\Users\User\Downloads");
+    assert_eq!(
+        strip_unc_prefix(p1),
+        PathBuf::from(r"C:\Users\User\Downloads")
+    );
+
+    let p2 = PathBuf::from(r"\\?\UNC\Server\Share\Folder");
+    assert_eq!(
+        strip_unc_prefix(p2),
+        PathBuf::from(r"\\Server\Share\Folder")
+    );
+
+    let p3 = PathBuf::from(r"C:\Normal\Path");
+    assert_eq!(strip_unc_prefix(p3), PathBuf::from(r"C:\Normal\Path"));
+}
+
 // =========================================================================
 // 3. Filename Sanitization Tests
 // =========================================================================

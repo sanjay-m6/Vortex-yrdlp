@@ -12,6 +12,7 @@ export const GlassButton: React.FC<GlassButtonProps> = ({
   variant = "secondary",
   size = "md",
   disabled,
+  type = "button",
   ...props
 }) => {
   const sizeClasses = {
@@ -33,6 +34,7 @@ export const GlassButton: React.FC<GlassButtonProps> = ({
 
   return (
     <button
+      type={type}
       disabled={disabled}
       className={cn(
         "inline-flex items-center justify-center gap-2 transition-all duration-150 select-none cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none",

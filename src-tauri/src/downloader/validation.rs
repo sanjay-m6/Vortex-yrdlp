@@ -24,6 +24,18 @@ pub fn validate_url(url: &str) -> Result<(), EngineError> {
     Ok(())
 }
 
+/// Strips Windows extended-length UNC path prefix (\\?\ or \\?\UNC\) from a PathBuf.
+pub fn strip_unc_prefix(path: PathBuf) -> PathBuf {
+    let s = path.to_string_lossy();
+    if let Some(stripped) = s.strip_prefix(r"\\?\UNC\") {
+        PathBuf::from(format!(r"\\{}", stripped))
+    } else if let Some(stripped) = s.strip_prefix(r"\\?\") {
+        PathBuf::from(stripped)
+    } else {
+        path
+    }
+}
+
 /// Validates that the output directory exists or can be created, has no path traversal, and is writable.
 pub fn validate_output_directory(dir_str: &str) -> Result<PathBuf, EngineError> {
     let trimmed = dir_str.trim();
@@ -33,14 +45,26 @@ pub fn validate_output_directory(dir_str: &str) -> Result<PathBuf, EngineError> 
         ));
     }
 
-    let path = PathBuf::from(trimmed);
-
     // Check for obvious path traversal
     if trimmed.contains("..") {
         return Err(EngineError::permission_denied(
             "Path traversal '..' is not permitted in destination directory",
         ));
     }
+
+    // Resolve relative path (or generic "Downloads") to the user's real downloads directory
+    let path = if trimmed.eq_ignore_ascii_case("downloads") {
+        dirs::download_dir().unwrap_or_else(|| PathBuf::from("."))
+    } else {
+        let p = PathBuf::from(trimmed);
+        if !p.is_absolute() {
+            dirs::download_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(p)
+        } else {
+            p
+        }
+    };
 
     if !path.exists() {
         std::fs::create_dir_all(&path).map_err(|e| {
@@ -72,7 +96,8 @@ pub fn validate_output_directory(dir_str: &str) -> Result<PathBuf, EngineError> 
         }
     }
 
-    Ok(path.canonicalize().unwrap_or(path))
+    let canonical = path.canonicalize().unwrap_or(path);
+    Ok(strip_unc_prefix(canonical))
 }
 
 /// Sanitizes filenames removing illegal characters and reserved device names.
@@ -138,6 +163,7 @@ pub fn build_ytdlp_args(
 
     // 1. Structured machine-readable progress templates
     args.push("--newline".to_string());
+    args.push("--continue".to_string());
     args.push("--progress-template".to_string());
     args.push(
         "download:[vortex_progress]%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(progress._percent_str)s|%(progress.filename)s"
@@ -179,8 +205,21 @@ pub fn build_ytdlp_args(
     } else {
         match &request.format_selection {
             FormatSelection::Best => {
-                args.push("-f".to_string());
-                args.push("bv*+ba/b".to_string());
+                if request.media_type == MediaType::Audio {
+                    if !ffmpeg_available {
+                        return Err(EngineError::not_found(
+                            "FFmpeg is required to extract and convert audio streams. Please install FFmpeg or configure its path in Settings.",
+                        ));
+                    }
+                    args.push("--extract-audio".to_string());
+                    args.push("--audio-format".to_string());
+                    args.push("mp3".to_string());
+                    args.push("--audio-quality".to_string());
+                    args.push("0".to_string());
+                } else {
+                    args.push("-f".to_string());
+                    args.push("bv*+ba/b".to_string());
+                }
             }
             FormatSelection::Preset(preset) => match preset.to_lowercase().as_str() {
                 "4k" | "2160p" => {
@@ -203,11 +242,11 @@ pub fn build_ytdlp_args(
                     args.push("-f".to_string());
                     args.push("bv*[height<=480]+ba/b[height<=480] / bv*+ba/b".to_string());
                 }
-                "audio_best" | "mp3_320" => {
+                "mp3" | "audio" | "audio_best" | "mp3_320" => {
                     if !ffmpeg_available {
                         return Err(EngineError::not_found(
-                        "FFmpeg is required to extract and convert audio streams. Please install FFmpeg or configure its path in Settings.",
-                    ));
+                            "FFmpeg is required to extract and convert audio streams. Please install FFmpeg or configure its path in Settings.",
+                        ));
                     }
                     args.push("--extract-audio".to_string());
                     args.push("--audio-format".to_string());

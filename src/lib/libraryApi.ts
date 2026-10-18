@@ -56,6 +56,13 @@ export const libraryApi = {
     return invoke<void>("delete_library_file", { id });
   },
 
+  deleteMediaItem: async (
+    id: string,
+    deleteFile: boolean = true
+  ): Promise<void> => {
+    return invoke<void>("delete_media_item", { id, deleteFile });
+  },
+
   retryFailedDownload: async (id: string): Promise<string> => {
     return invoke<string>("retry_failed_download", { id });
   },

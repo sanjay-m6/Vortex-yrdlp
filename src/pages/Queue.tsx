@@ -47,13 +47,7 @@ export const Queue: React.FC = () => {
   } = useQueueStore();
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    init().then((fn) => {
-      unlisten = fn;
-    });
-    return () => {
-      if (unlisten) unlisten();
-    };
+    init();
   }, [init]);
 
   const items = snapshot?.items || [];

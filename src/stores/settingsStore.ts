@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { api } from "../lib/api";
 
 export type ThemeMode = "light" | "dark" | "system";
 
@@ -8,6 +9,7 @@ export interface SettingsState {
   askBeforeDownload: boolean;
   startWithSystem: boolean;
   minimizeToTray: boolean;
+  init: () => Promise<void>;
   setTheme: (theme: ThemeMode) => void;
   updateSettings: (partial: Partial<SettingsState>) => void;
 }
@@ -37,12 +39,26 @@ const saveSettings = (state: Partial<SettingsState>) => {
 
 const initial = loadInitialSettings();
 
-export const useSettingsStore = create<SettingsState>((set) => ({
+export const useSettingsStore = create<SettingsState>((set, get) => ({
   theme: initial.theme || "light",
   downloadDirectory: initial.downloadDirectory || "Downloads",
   askBeforeDownload: initial.askBeforeDownload ?? false,
   startWithSystem: initial.startWithSystem ?? false,
   minimizeToTray: initial.minimizeToTray ?? false,
+
+  init: async () => {
+    const current = get().downloadDirectory;
+    if (!current || current === "Downloads") {
+      try {
+        const defaultDir = await api.getDefaultDownloadDirectory();
+        if (defaultDir) {
+          get().updateSettings({ downloadDirectory: defaultDir });
+        }
+      } catch (e) {
+        console.warn("Could not query default download directory:", e);
+      }
+    }
+  },
 
   setTheme: (theme) =>
     set((state) => {

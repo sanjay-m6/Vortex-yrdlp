@@ -41,13 +41,7 @@ export const Downloads: React.FC = () => {
   } = useDownloadStore();
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    init().then((u) => {
-      unlisten = u;
-    });
-    return () => {
-      if (unlisten) unlisten();
-    };
+    init();
   }, [init]);
 
   const handleRefresh = async () => {

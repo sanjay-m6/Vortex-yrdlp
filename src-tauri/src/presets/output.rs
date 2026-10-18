@@ -17,13 +17,19 @@ pub fn resolve_output_directory(
     uploader: Option<&str>,
     upload_date: Option<&str>,
 ) -> Result<PathBuf, EngineError> {
-    let root = PathBuf::from(root_dir);
-
-    if !root.is_absolute() {
-        return Err(EngineError::invalid_path(
-            "Output directory must be an absolute path",
-        ));
-    }
+    let trimmed = root_dir.trim();
+    let root = if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("downloads") {
+        dirs::download_dir().unwrap_or_else(|| PathBuf::from("."))
+    } else {
+        let p = PathBuf::from(trimmed);
+        if !p.is_absolute() {
+            dirs::download_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(p)
+        } else {
+            p
+        }
+    };
 
     let mut path = root.clone();
 
@@ -87,7 +93,7 @@ pub fn resolve_output_directory(
     // Verify the resolved path is within the root directory
     validate_path_within_root(&path, &root)?;
 
-    Ok(path)
+    Ok(crate::downloader::validation::strip_unc_prefix(path))
 }
 
 /// Validates that a path does not escape the designated root directory.

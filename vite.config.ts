@@ -31,7 +31,24 @@ export default defineConfig(() => ({
         }
       : undefined,
     watch: {
-      ignored: ["**/src-tauri/**"],
+      ignored: [
+        "**/src-tauri/**",
+        "**/Downloads/**",
+        "**/downloads/**",
+        "**/bin/**",
+        "**/*.tmp",
+        "**/*.part",
+        "**/*.ytdl",
+        "**/*.mp4",
+        "**/*.mkv",
+        "**/*.webm",
+        "**/*.mp3",
+        "**/*.m4a",
+        "**/*.wav",
+        "**/*.opus",
+        "**/*.flac",
+        "**/*.aria2",
+      ],
     },
   },
 }));

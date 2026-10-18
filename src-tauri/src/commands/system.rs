@@ -143,11 +143,44 @@ pub async fn app_toggle_maximize_window(window: tauri::Window) -> Result<bool, S
 }
 
 #[command]
-pub async fn app_close_window(window: tauri::Window) -> Result<(), String> {
-    window.close().map_err(|e| e.to_string())
+pub async fn app_close_window(
+    window: tauri::Window,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let active_count = state.queue_manager.active_downloads_count().await;
+    if active_count > 0 {
+        // Active downloads in progress: preserve by hiding window instead of terminating process
+        window.hide().map_err(|e| e.to_string())?;
+    } else {
+        window.close().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[command]
+pub async fn app_show_window(window: tauri::Window) -> Result<(), String> {
+    window.show().map_err(|e| e.to_string())?;
+    window.set_focus().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[command]
+pub async fn app_get_active_downloads_count(state: State<'_, AppState>) -> Result<usize, String> {
+    Ok(state.queue_manager.active_downloads_count().await)
+}
+
+#[command]
+pub async fn app_exit(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    state.queue_manager.shutdown().await;
+    app.exit(0);
+    Ok(())
 }
 
 #[command]
 pub async fn app_is_maximized(window: tauri::Window) -> Result<bool, String> {
     window.is_maximized().map_err(|e| e.to_string())
 }
+

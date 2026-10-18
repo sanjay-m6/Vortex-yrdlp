@@ -354,3 +354,150 @@ async fn test_clear_completed_and_failed_downloads() {
     // Clean up
     let _ = std::fs::remove_file(db_path);
 }
+
+#[tokio::test]
+async fn test_shutdown_and_active_detection() {
+    let (queue, db_path) = create_test_queue_manager(2);
+
+    // Initial state: no active downloads
+    assert!(!queue.has_active_downloads_sync());
+    assert_eq!(queue.active_downloads_count().await, 0);
+
+    // Simulate active task in memory
+    let task = QueueItem {
+        id: "task-shutdown-active".to_string(),
+        request: sample_request("task-shutdown-active", "https://example.com/v"),
+        status: DownloadState::Downloading,
+        priority: QueuePriority::Normal,
+        queue_position: 0,
+        progress: None,
+        created_at: "2026-10-15T10:00:00Z".to_string(),
+        updated_at: "2026-10-15T10:00:00Z".to_string(),
+        started_at: Some("2026-10-15T10:00:00Z".to_string()),
+        completed_at: None,
+        error_code: None,
+        error_message: None,
+        output_path: None,
+        downloaded_bytes: 50,
+        total_bytes: Some(100),
+        attempt_count: 1,
+    };
+
+    {
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        insert_or_update_download(&conn, &task).unwrap();
+    }
+
+    queue.initialize().await;
+
+    // Perform graceful shutdown
+    queue.shutdown().await;
+
+    // Verify task transitioned to Failed with truthful shutdown error
+    let snap = queue.get_snapshot().await;
+    let shut_item = snap.items.iter().find(|i| i.id == "task-shutdown-active").unwrap();
+    assert_eq!(shut_item.status, DownloadState::Failed);
+    assert!(shut_item.error_message.as_ref().unwrap().contains("interrupted"));
+
+    let _ = std::fs::remove_file(db_path);
+}
+
+#[tokio::test]
+async fn test_retry_interrupted_mp3_and_best_quality_from_db() {
+    let (_queue, db_path) = create_test_queue_manager(2);
+
+    let mp3_req = DownloadRequest {
+        task_id: Some("retry-mp3".to_string()),
+        webpage_url: "https://www.youtube.com/watch?v=sample1".to_string(),
+        format_selection: FormatSelection::Preset("mp3".to_string()),
+        output_directory: std::env::temp_dir().to_string_lossy().to_string(),
+        filename_template: Some("sample1.mp3".to_string()),
+        media_type: MediaType::Audio,
+        overwrite_policy: OverwritePolicy::Rename,
+        title: Some("Sample MP3 Audio".to_string()),
+        uploader: None,
+        thumbnail: None,
+        duration: Some(180.0),
+        preset_id: Some("mp3".to_string()),
+        settings_snapshot: None,
+    };
+
+    let best_req = DownloadRequest {
+        task_id: Some("retry-best".to_string()),
+        webpage_url: "https://www.youtube.com/watch?v=sample2".to_string(),
+        format_selection: FormatSelection::Best,
+        output_directory: std::env::temp_dir().to_string_lossy().to_string(),
+        filename_template: Some("sample2.mp4".to_string()),
+        media_type: MediaType::Video,
+        overwrite_policy: OverwritePolicy::Rename,
+        title: Some("Sample Best Quality Video".to_string()),
+        uploader: None,
+        thumbnail: None,
+        duration: Some(300.0),
+        preset_id: None,
+        settings_snapshot: None,
+    };
+
+    let mp3_item = QueueItem {
+        id: "retry-mp3".to_string(),
+        request: mp3_req,
+        status: DownloadState::Failed,
+        priority: QueuePriority::Normal,
+        queue_position: 0,
+        progress: None,
+        created_at: "2026-10-15T10:00:00Z".to_string(),
+        updated_at: "2026-10-15T10:00:00Z".to_string(),
+        started_at: Some("2026-10-15T10:00:00Z".to_string()),
+        completed_at: Some("2026-10-15T10:00:10Z".to_string()),
+        error_code: Some("APP_EXITED".to_string()),
+        error_message: Some("Download was interrupted: the application exited before completion.".to_string()),
+        output_path: None,
+        downloaded_bytes: 2048,
+        total_bytes: Some(10000),
+        attempt_count: 1,
+    };
+
+    let best_item = QueueItem {
+        id: "retry-best".to_string(),
+        request: best_req,
+        status: DownloadState::Failed,
+        priority: QueuePriority::Normal,
+        queue_position: 1,
+        progress: None,
+        created_at: "2026-10-15T10:00:00Z".to_string(),
+        updated_at: "2026-10-15T10:00:00Z".to_string(),
+        started_at: Some("2026-10-15T10:00:00Z".to_string()),
+        completed_at: Some("2026-10-15T10:00:10Z".to_string()),
+        error_code: Some("APP_EXITED".to_string()),
+        error_message: Some("Download was interrupted: the application exited before completion.".to_string()),
+        output_path: None,
+        downloaded_bytes: 512000,
+        total_bytes: Some(1500000),
+        attempt_count: 1,
+    };
+
+    // Insert directly to database
+    {
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        insert_or_update_download(&conn, &mp3_item).unwrap();
+        record_attempt_start(&conn, "retry-mp3", 1, "2026-10-15T10:00:00Z").unwrap();
+
+        insert_or_update_download(&conn, &best_item).unwrap();
+        record_attempt_start(&conn, "retry-best", 1, "2026-10-15T10:00:00Z").unwrap();
+    }
+
+    // Verify database lookup function works for unqueued items
+    {
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        let loaded_mp3 = vortex_lib::database::fetch_download_by_id(&conn, "retry-mp3").unwrap().unwrap();
+        assert_eq!(loaded_mp3.id, "retry-mp3");
+        assert_eq!(loaded_mp3.request.media_type, MediaType::Audio);
+
+        let loaded_best = vortex_lib::database::fetch_download_by_id(&conn, "retry-best").unwrap().unwrap();
+        assert_eq!(loaded_best.id, "retry-best");
+        assert_eq!(loaded_best.request.media_type, MediaType::Video);
+    }
+
+    let _ = std::fs::remove_file(db_path);
+}
+

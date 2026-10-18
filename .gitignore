@@ -37,3 +37,5 @@ src-tauri/gen/schemas
 # Local binaries and downloads
 bin/
 *.exe
+Downloads/
+src-tauri/Downloads/

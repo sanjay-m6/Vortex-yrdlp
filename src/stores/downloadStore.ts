@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { listen } from "@tauri-apps/api/event";
 import { DownloadProgress, DownloadRequest, DownloadTask, DownloadState } from "../types/download";
 import { downloadApi } from "../lib/downloadApi";
 
@@ -186,6 +187,9 @@ function calculateCounts(tasks: Record<string, DownloadTask>) {
   return { active, completed, failed };
 }
 
+let globalDownloadUnlisteners: Array<() => void> = [];
+let isAttachingListeners = false;
+
 export const useDownloadStore = create<DownloadStoreState>((set, get) => ({
   tasks: {},
   taskOrder: [],
@@ -195,11 +199,14 @@ export const useDownloadStore = create<DownloadStoreState>((set, get) => ({
   isInitialized: false,
 
   init: async () => {
-    if (get().isInitialized) return () => {};
-
-    // Initial load
+    // Always load the latest tasks from SQLite
     await get().loadTasks();
-    set({ isInitialized: true });
+
+    if (globalDownloadUnlisteners.length > 0 || isAttachingListeners) {
+      return () => {};
+    }
+
+    isAttachingListeners = true;
 
     // Safely update task progress while respecting state transitions and attempt IDs
     const handleProgressUpdate = (payload: DownloadProgress) => {
@@ -285,21 +292,53 @@ export const useDownloadStore = create<DownloadStoreState>((set, get) => ({
       });
     };
 
-    // Subscriptions
-    const unlisteners: Array<() => void> = [];
+    try {
+      const u1 = await downloadApi.onDownloadStarted(handleProgressUpdate);
+      const u2 = await downloadApi.onDownloadProgress(handleProgressUpdate);
+      const u3 = await downloadApi.onDownloadProcessing(handleProgressUpdate);
+      const u4 = await downloadApi.onDownloadCompleted(handleProgressUpdate);
+      const u5 = await downloadApi.onDownloadFailed(handleProgressUpdate);
+      const u6 = await downloadApi.onDownloadCancelling(handleProgressUpdate);
+      const u7 = await downloadApi.onDownloadCancelled(handleProgressUpdate);
+      const u8 = await listen<{ taskId: string; outputPath: string }>(
+        "task_completed",
+        (event) => {
+          set((state) => {
+            const existing = state.tasks[event.payload.taskId];
+            if (existing) {
+              const updated = normalizeTask({
+                ...existing,
+                state: "completed",
+                outputPath: event.payload.outputPath || existing.outputPath,
+                progress: {
+                  ...existing.progress,
+                  state: "completed",
+                  outputPath: event.payload.outputPath || existing.progress.outputPath,
+                },
+              });
+              const updatedTasks = { ...state.tasks, [event.payload.taskId]: updated };
+              const counts = calculateCounts(updatedTasks);
+              return {
+                tasks: updatedTasks,
+                completedCount: counts.completed,
+                activeCount: counts.active,
+              };
+            }
+            return state;
+          });
+        }
+      );
 
-    const u1 = await downloadApi.onDownloadStarted(handleProgressUpdate);
-    const u2 = await downloadApi.onDownloadProgress(handleProgressUpdate);
-    const u3 = await downloadApi.onDownloadProcessing(handleProgressUpdate);
-    const u4 = await downloadApi.onDownloadCompleted(handleProgressUpdate);
-    const u5 = await downloadApi.onDownloadFailed(handleProgressUpdate);
-    const u6 = await downloadApi.onDownloadCancelling(handleProgressUpdate);
-    const u7 = await downloadApi.onDownloadCancelled(handleProgressUpdate);
-
-    unlisteners.push(u1, u2, u3, u4, u5, u6, u7);
+      globalDownloadUnlisteners = [u1, u2, u3, u4, u5, u6, u7, u8];
+      set({ isInitialized: true });
+    } catch (e) {
+      console.error("Failed to attach download event listeners:", e);
+    } finally {
+      isAttachingListeners = false;
+    }
 
     return () => {
-      unlisteners.forEach((u) => u());
+      // Retain persistent listeners across page navigation to avoid missing background download events
     };
   },
 

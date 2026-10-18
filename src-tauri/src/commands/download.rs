@@ -1,4 +1,3 @@
-use std::path::Path;
 use tauri::{command, AppHandle, State};
 
 use crate::downloader::AppState;
@@ -186,40 +185,146 @@ pub async fn get_task_attempts(
 }
 
 #[command]
-pub async fn open_downloaded_file(path: String) -> Result<(), String> {
-    let p = Path::new(&path);
-    if !p.exists() {
-        return Err("File does not exist".to_string());
+pub async fn open_downloaded_file(
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("File path is empty".to_string());
     }
 
-    open::that(p).map_err(|e| format!("Failed to open file: {}", e))
-}
+    #[cfg(target_os = "windows")]
+    let clean = trimmed.replace('/', "\\");
+    #[cfg(not(target_os = "windows"))]
+    let clean = trimmed.to_string();
 
-#[command]
-pub async fn open_download_folder(path: String) -> Result<(), String> {
-    let p = Path::new(&path);
-    if !p.exists() {
-        return Err("File or folder does not exist".to_string());
-    }
+    let mut direct_path = std::path::PathBuf::from(&clean);
 
-    if p.is_dir() {
-        open::that(p).map_err(|e| format!("Failed to open folder: {}", e))?;
-    } else {
-        #[cfg(target_os = "windows")]
-        {
-            let _ = std::process::Command::new("explorer.exe")
-                .arg(format!("/select,{}", p.display()))
-                .spawn();
-        }
-        #[cfg(not(target_os = "windows"))]
-        {
-            if let Some(parent) = p.parent() {
-                let _ = open::that(parent);
+    // If direct path doesn't exist, check if it's a task ID or if recorded in database
+    if !direct_path.exists() {
+        if let Ok(conn) = state.db.conn.lock() {
+            if let Ok(Some(item)) = crate::database::fetch_download_by_id(&conn, trimmed) {
+                if let Some(ref p_str) = item.output_path {
+                    #[cfg(target_os = "windows")]
+                    let cand = std::path::PathBuf::from(p_str.replace('/', "\\"));
+                    #[cfg(not(target_os = "windows"))]
+                    let cand = std::path::PathBuf::from(p_str);
+                    if cand.exists() {
+                        direct_path = cand;
+                    }
+                }
             }
         }
     }
 
-    Ok(())
+    if !direct_path.exists() {
+        return Err(format!("File does not exist on disk: {}", clean));
+    }
+
+    if !direct_path.is_file() {
+        return Err(format!("Target is not a regular file: {}", clean));
+    }
+
+    open::that_detached(&direct_path).map_err(|e| format!("Failed to open file: {}", e))
+}
+
+#[command]
+pub async fn open_download_folder(
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("Path is empty".to_string());
+    }
+
+    #[cfg(target_os = "windows")]
+    let clean = trimmed.replace('/', "\\");
+    #[cfg(not(target_os = "windows"))]
+    let clean = trimmed.to_string();
+
+    let mut direct_path = std::path::PathBuf::from(&clean);
+
+    // If direct path doesn't exist, check if it's a task ID
+    if !direct_path.exists() {
+        if let Ok(conn) = state.db.conn.lock() {
+            if let Ok(Some(item)) = crate::database::fetch_download_by_id(&conn, trimmed) {
+                if let Some(ref p_str) = item.output_path {
+                    #[cfg(target_os = "windows")]
+                    let p = std::path::PathBuf::from(p_str.replace('/', "\\"));
+                    #[cfg(not(target_os = "windows"))]
+                    let p = std::path::PathBuf::from(p_str);
+
+                    if p.exists() {
+                        direct_path = p;
+                    } else if let Some(parent) = p.parent() {
+                        if parent.exists() {
+                            direct_path = parent.to_path_buf();
+                        }
+                    }
+                } else {
+                    let out_dir = std::path::PathBuf::from(&item.request.output_directory);
+                    if out_dir.exists() {
+                        direct_path = out_dir;
+                    }
+                }
+            }
+        }
+    }
+
+    if !direct_path.exists() {
+        return Err(format!("File or folder does not exist: {}", clean));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let clean_str = direct_path.to_string_lossy().replace('/', "\\");
+        if direct_path.is_file() {
+            let status = std::process::Command::new("explorer.exe")
+                .arg(format!("/select,{}", clean_str))
+                .spawn();
+            if status.is_ok() {
+                return Ok(());
+            }
+        }
+
+        let dir = if direct_path.is_dir() {
+            clean_str
+        } else {
+            direct_path
+                .parent()
+                .map(|p| p.to_string_lossy().replace('/', "\\"))
+                .unwrap_or(clean_str)
+        };
+        open::that_detached(dir).map_err(|e| format!("Failed to open folder: {}", e))
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if direct_path.is_file() {
+            let _ = std::process::Command::new("open")
+                .args(["-R", &direct_path.to_string_lossy()])
+                .spawn();
+            return Ok(());
+        }
+        let dir = if direct_path.is_dir() {
+            &direct_path
+        } else {
+            direct_path.parent().unwrap_or(&direct_path)
+        };
+        open::that_detached(dir).map_err(|e| format!("Failed to open folder: {}", e))
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        let dir = if direct_path.is_dir() {
+            &direct_path
+        } else {
+            direct_path.parent().unwrap_or(&direct_path)
+        };
+        open::that_detached(dir).map_err(|e| format!("Failed to open folder: {}", e))
+    }
 }
 
 #[command]

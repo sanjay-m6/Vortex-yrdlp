@@ -94,7 +94,7 @@ pub fn run() {
         playlist_manager,
     };
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(app_state)
         .setup(|app| {
@@ -106,7 +106,39 @@ pub fn run() {
                 queue_mgr.initialize_with_app(handle).await;
             });
 
+            // Set up System Tray
+            if let Some(icon) = app.default_window_icon() {
+                let _ = tauri::tray::TrayIconBuilder::new()
+                    .icon(icon.clone())
+                    .tooltip("Vortex Media Downloader")
+                    .on_tray_icon_event(|tray, event| {
+                        if let tauri::tray::TrayIconEvent::Click {
+                            button: tauri::tray::MouseButton::Left,
+                            button_state: tauri::tray::MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            let app = tray.app_handle();
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                    })
+                    .build(app);
+            }
+
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let app = window.app_handle();
+                let state = app.state::<AppState>();
+                if state.queue_manager.has_active_downloads_sync() {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             // Phase 6 Playlist & Batch Download commands
@@ -156,6 +188,9 @@ pub fn run() {
             commands::system::app_minimize_window,
             commands::system::app_toggle_maximize_window,
             commands::system::app_close_window,
+            commands::system::app_show_window,
+            commands::system::app_get_active_downloads_count,
+            commands::system::app_exit,
             commands::system::app_is_maximized,
             commands::downloader::analyze_media_url,
             commands::downloader::start_media_download,
@@ -171,6 +206,7 @@ pub fn run() {
             commands::history::relink_library_file,
             commands::history::remove_history_record,
             commands::history::delete_library_file,
+            commands::history::delete_media_item,
             commands::history::retry_failed_download,
             commands::history::remove_history_item,
             commands::history::clear_download_history,
@@ -193,6 +229,16 @@ pub fn run() {
             logging::read_recent_logs,
             updater::check_app_update,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle, event| {
+        if let tauri::RunEvent::ExitRequested { .. } = event {
+            let state = app_handle.state::<AppState>();
+            let qm = Arc::clone(&state.queue_manager);
+            tauri::async_runtime::block_on(async move {
+                qm.shutdown().await;
+            });
+        }
+    });
 }

@@ -56,26 +56,33 @@ export const DownloadCard: React.FC<DownloadCardProps> = ({ task: rawTask }) => 
   };
 
   const handleOpenFile = async () => {
-    if (task.outputPath) {
+    const target = task.outputPath || task.progress?.outputPath || task.id;
+    if (target) {
       try {
-        await openFile(task.outputPath);
-      } catch {
-        showToast("Could not open file", "error");
+        await openFile(target);
+      } catch (e: any) {
+        showToast(e?.message || String(e) || "Could not open file", "error");
       }
+    } else {
+      showToast("No output file path recorded for this download", "info");
     }
   };
 
   const handleOpenFolder = async () => {
-    const target = task.outputPath || request.outputDirectory;
-    try {
-      await openFolder(target);
-    } catch {
-      showToast("Could not open folder", "error");
+    const target = task.outputPath || task.progress?.outputPath || request.outputDirectory || task.id;
+    if (target) {
+      try {
+        await openFolder(target);
+      } catch (e: any) {
+        showToast(e?.message || String(e) || "Could not open folder", "error");
+      }
+    } else {
+      showToast("No destination folder found for this download", "info");
     }
   };
 
   const handleCopyPath = async () => {
-    const p = task.outputPath || request.outputDirectory;
+    const p = task.outputPath || task.progress?.outputPath || request.outputDirectory;
     if (p) {
       try {
         await navigator.clipboard.writeText(p);
@@ -85,6 +92,8 @@ export const DownloadCard: React.FC<DownloadCardProps> = ({ task: rawTask }) => 
       } catch {
         showToast("Failed to copy path", "error");
       }
+    } else {
+      showToast("No path available to copy", "info");
     }
   };
 

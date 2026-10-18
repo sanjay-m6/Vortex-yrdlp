@@ -1,3 +1,4 @@
+use rusqlite::Connection;
 use vortex_lib::database::{
     delete_preset_by_id, fetch_all_presets, fetch_download_settings, fetch_preset_by_id, init_db,
     insert_or_update_preset, store_download_settings,
@@ -12,7 +13,6 @@ use vortex_lib::presets::model::{
 };
 use vortex_lib::presets::output::resolve_output_directory;
 use vortex_lib::presets::resolver::{create_settings_snapshot, resolve_preset_to_ytdlp_args};
-use rusqlite::Connection;
 
 fn setup_test_db() -> Connection {
     let conn = Connection::open_in_memory().expect("failed to open in-memory db");
@@ -224,4 +224,25 @@ fn test_output_folder_rules() {
     .expect("resolve failed");
 
     assert!(dir.to_string_lossy().contains("My Favorite Tracks"));
+}
+
+#[test]
+fn test_resolve_output_directory_handles_downloads_and_relative() {
+    let dir = resolve_output_directory(
+        "Downloads",
+        None,
+        None,
+        None,
+        false,
+        false,
+        false,
+        false,
+        None,
+        None,
+        None,
+    )
+    .expect("resolve relative Downloads keyword failed");
+
+    assert!(dir.is_absolute());
+    assert!(!dir.to_string_lossy().starts_with(r"\\?\"));
 }

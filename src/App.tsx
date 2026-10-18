@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell";
 import { Dashboard } from "./pages/Dashboard";
@@ -8,10 +8,20 @@ import { History } from "./pages/History";
 import { Settings } from "./pages/Settings";
 import { About } from "./pages/About";
 import { useTheme } from "./hooks/useTheme";
+import { useSettingsStore } from "./stores/settingsStore";
+import { useDownloadStore } from "./stores/downloadStore";
 
 export function App() {
   // Initialize theme listener (light / dark / system)
   useTheme();
+
+  const initSettings = useSettingsStore((s) => s.init);
+  const initDownloads = useDownloadStore((s) => s.init);
+
+  useEffect(() => {
+    initSettings();
+    initDownloads();
+  }, [initSettings, initDownloads]);
 
   return (
     <HashRouter>

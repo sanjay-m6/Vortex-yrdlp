@@ -40,7 +40,7 @@ interface LibraryState {
   copyItemPath: (id: string) => Promise<string>;
   relinkItem: (id: string, newPath: string) => Promise<void>;
   removeRecord: (id: string) => Promise<void>;
-  deleteFile: (id: string) => Promise<void>;
+  deleteFile: (id: string, deleteFileOnDisk?: boolean) => Promise<void>;
   retryDownload: (id: string) => Promise<string>;
   initEventListener: () => Promise<() => void>;
 }
@@ -59,8 +59,9 @@ const defaultFilter: MediaLibraryFilter = {
   availability: "all",
   sortBy: "newest",
   page: 1,
-  pageSize: 24,
 };
+
+let globalLibraryUnlisteners: Array<() => void> = [];
 
 export const useLibraryStore = create<LibraryState>((set, get) => ({
   items: [],
@@ -203,17 +204,26 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     get().loadLibrary();
   },
 
-  deleteFile: async (id: string) => {
-    await libraryApi.deleteLibraryFile(id);
+  deleteFile: async (id: string, deleteFileOnDisk: boolean = true) => {
+    try {
+      await libraryApi.deleteMediaItem(id, deleteFileOnDisk);
+    } catch (err) {
+      console.warn("deleteMediaItem invocation error, attempting fallback:", err);
+      if (deleteFileOnDisk) {
+        try {
+          await libraryApi.deleteLibraryFile(id);
+        } catch {
+          // ignore
+        }
+      }
+      await libraryApi.removeHistoryRecord(id);
+    }
+
     set((state) => ({
-      items: state.items.map((i) =>
-        i.id === id ? { ...i, fileAvailability: "missing" } : i
-      ),
+      items: state.items.filter((i) => i.id !== id),
+      totalCount: Math.max(0, state.totalCount - 1),
       deleteTargetItem: null,
-      selectedItem:
-        state.selectedItem?.id === id
-          ? { ...state.selectedItem, fileAvailability: "missing" }
-          : state.selectedItem,
+      selectedItem: state.selectedItem?.id === id ? null : state.selectedItem,
     }));
     get().loadLibrary();
   },
@@ -225,6 +235,10 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   },
 
   initEventListener: async () => {
+    if (globalLibraryUnlisteners.length > 0) {
+      return () => {};
+    }
+
     const unlistenCompleted = await listen("task_completed", () => {
       get().loadLibrary();
     });
@@ -238,11 +252,13 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       get().loadLibrary();
     });
 
-    return () => {
-      unlistenCompleted();
-      unlistenFailed();
-      unlistenCancelled();
-      unlistenRetried();
-    };
+    globalLibraryUnlisteners = [
+      unlistenCompleted,
+      unlistenFailed,
+      unlistenCancelled,
+      unlistenRetried,
+    ];
+
+    return () => {};
   },
 }));

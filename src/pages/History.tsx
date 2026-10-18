@@ -73,14 +73,8 @@ export const History: React.FC = () => {
   // Initialize and register event listeners on mount
   useEffect(() => {
     loadLibrary();
-    let unlisten: (() => void) | undefined;
-    initEventListener().then((fn) => {
-      unlisten = fn;
-    });
-    return () => {
-      if (unlisten) unlisten();
-    };
-  }, []);
+    initEventListener();
+  }, [loadLibrary, initEventListener]);
 
   // Debounced search query
   useEffect(() => {

@@ -162,6 +162,23 @@ pub fn delete_media_file_on_disk(conn: &Connection, id: &str) -> Result<(), Engi
         let _ = update_media_file_verification(conn, id, FileAvailability::Missing, None, None);
     }
 
+    // Also clean up any lingering partial files (.part, .ytdl, etc.) in the download output directory
+    let out_dir: Option<String> = conn
+        .query_row(
+            "SELECT output_directory FROM downloads WHERE id = ?1",
+            rusqlite::params![id],
+            |r| r.get(0),
+        )
+        .ok()
+        .flatten();
+
+    if let Some(ref dir_str) = out_dir {
+        let dir = Path::new(dir_str);
+        if dir.exists() && dir.is_dir() {
+            crate::downloader::output::cleanup_partial_files(dir, Some(&item.title));
+        }
+    }
+
     Ok(())
 }
 
@@ -172,11 +189,16 @@ pub fn open_media_file(path_str: &str) -> Result<(), EngineError> {
         return Err(EngineError::invalid_path("File path is empty"));
     }
 
-    let path = Path::new(trimmed);
+    #[cfg(target_os = "windows")]
+    let clean_path = trimmed.replace('/', "\\");
+    #[cfg(not(target_os = "windows"))]
+    let clean_path = trimmed.to_string();
+
+    let path = Path::new(&clean_path);
     if !path.exists() {
         return Err(EngineError::not_found(format!(
             "File '{}' does not exist on disk",
-            trimmed
+            clean_path
         )));
     }
 
@@ -186,8 +208,8 @@ pub fn open_media_file(path_str: &str) -> Result<(), EngineError> {
         ));
     }
 
-    open::that_detached(trimmed).map_err(|e| {
-        EngineError::execution_failed(format!("Failed to open file '{}': {}", trimmed, e))
+    open::that_detached(&clean_path).map_err(|e| {
+        EngineError::execution_failed(format!("Failed to open file '{}': {}", clean_path, e))
     })
 }
 
@@ -198,17 +220,24 @@ pub fn open_containing_folder(path_str: &str) -> Result<(), EngineError> {
         return Err(EngineError::invalid_path("File path is empty"));
     }
 
-    let path = PathBuf::from(trimmed);
-
     #[cfg(target_os = "windows")]
     {
-        if path.exists() {
-            let status = std::process::Command::new("explorer")
-                .args(["/select,", trimmed])
+        let clean_path = trimmed.replace('/', "\\");
+        let path = PathBuf::from(&clean_path);
+        if path.is_file() && path.exists() {
+            let status = std::process::Command::new("explorer.exe")
+                .arg(format!("/select,{}", clean_path))
                 .spawn();
             if status.is_ok() {
                 return Ok(());
             }
+        }
+
+        // If path is a directory and exists, open directly
+        if path.is_dir() && path.exists() {
+            return open::that_detached(&clean_path).map_err(|e| {
+                EngineError::execution_failed(format!("Failed to open directory: {}", e))
+            });
         }
 
         // Fallback to opening parent directory

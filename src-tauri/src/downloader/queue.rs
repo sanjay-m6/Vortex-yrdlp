@@ -9,17 +9,18 @@ use tauri::{AppHandle, Emitter, Runtime};
 
 use crate::database::{
     clear_completed_downloads_db, clear_failed_downloads_db, delete_download, fetch_all_downloads,
-    fetch_attempts_for_download, get_setting, insert_or_update_download, record_attempt_end,
-    record_attempt_start, set_setting, update_download_priority, update_download_status,
-    update_queue_positions, DbState,
+    fetch_attempts_for_download, fetch_download_by_id, get_setting, insert_or_update_download,
+    record_attempt_end, record_attempt_start, set_setting, update_download_priority,
+    update_download_status, update_queue_positions, DbState,
 };
 use crate::downloader::executor::{execute_download, DownloadEventEmitter};
 use crate::downloader::manager::DownloadManager;
 use crate::downloader::output::verify_output_file;
 use crate::downloader::validation::{validate_output_directory, validate_url};
+use crate::engine::resolver::ToolResolver;
 use crate::models::{
     DownloadAttemptRecord, DownloadProgress, DownloadRequest, DownloadState, EngineError,
-    QueueItem, QueuePriority, QueueSnapshot,
+    MediaType, QueueItem, QueuePriority, QueueSnapshot, ToolType,
 };
 
 pub const EVENT_QUEUE_UPDATED: &str = "queue_updated";
@@ -55,6 +56,7 @@ struct ActiveQueueTask {
     is_cancelled: Arc<AtomicBool>,
 }
 
+#[derive(Clone)]
 pub struct QueueManager {
     db: Arc<DbState>,
     download_manager: Arc<DownloadManager>,
@@ -159,7 +161,7 @@ impl QueueManager {
                     );
                 } else {
                     item.status = DownloadState::Failed;
-                    let err_msg = "Download was interrupted when application closed";
+                    let err_msg = "Download was interrupted: the application exited before completion.";
                     item.error_message = Some(err_msg.to_string());
                     item.completed_at = Some(now.clone());
                     let _ = update_download_status(
@@ -177,7 +179,7 @@ impl QueueManager {
                         &now,
                         "interrupted",
                         Some(-1),
-                        Some("APP_SHUTDOWN"),
+                        Some("APP_EXITED"),
                         Some(err_msg),
                     );
                 }
@@ -289,7 +291,17 @@ impl QueueManager {
     }
 
     /// Schedules eligible queued tasks respecting concurrency limits, priority, and pause state.
-    pub async fn schedule_next<R: Runtime>(&self, app: AppHandle<R>) {
+    pub fn schedule_next<R: Runtime + 'static>(
+        &self,
+        app: AppHandle<R>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> {
+        let self_clone = self.clone();
+        Box::pin(async move {
+            self_clone.schedule_next_internal(app).await;
+        })
+    }
+
+    async fn schedule_next_internal<R: Runtime + 'static>(&self, app: AppHandle<R>) {
         if self.is_paused.load(Ordering::SeqCst) {
             return;
         }
@@ -396,6 +408,7 @@ impl QueueManager {
             let custom_ytdlp_c = custom_ytdlp.clone();
             let custom_ffmpeg_c = custom_ffmpeg.clone();
             let task_id_clone = task_id.clone();
+            let self_clone = self.clone();
 
             tokio::spawn(async move {
                 let res = execute_download(
@@ -519,6 +532,9 @@ impl QueueManager {
 
                 // Schedule next eligible queued item
                 let _ = app_clone.emit(EVENT_QUEUE_UPDATED, &());
+                tauri::async_runtime::spawn(async move {
+                    self_clone.schedule_next(app_clone).await;
+                });
             });
         }
     }
@@ -573,19 +589,111 @@ impl QueueManager {
         }
     }
 
+    /// Returns the count of currently executing tasks.
+    pub async fn active_downloads_count(&self) -> usize {
+        let handles = self.active_handles.lock().await;
+        handles.len()
+    }
+
+    /// Synchronously checks if there are active download handles (non-blocking).
+    pub fn has_active_downloads_sync(&self) -> bool {
+        if let Ok(handles) = self.active_handles.try_lock() {
+            !handles.is_empty()
+        } else {
+            true // assume active if locked to be safe against accidental closure
+        }
+    }
+
+    /// Application shutdown handler: safely cancels running child processes
+    /// and marks them with an accurate interrupted state in SQLite so they can be resumed/retried.
+    pub async fn shutdown(&self) {
+        let mut handles = self.active_handles.lock().await;
+        let now = Utc::now().to_rfc3339();
+
+        for (task_id, handle) in handles.drain() {
+            handle.is_cancelled.store(true, Ordering::SeqCst);
+            if let Some(tx) = handle.cancel_tx {
+                let _ = tx.send(());
+            }
+
+            if let Ok(conn) = self.db.conn.lock() {
+                let _ = update_download_status(
+                    &conn,
+                    &task_id,
+                    DownloadState::Failed,
+                    Some("Download was interrupted: the application exited before completion."),
+                    None,
+                    Some(&now),
+                );
+            }
+        }
+
+        let mut items = self.items.write().await;
+        for item in items.iter_mut() {
+            if item.status.is_active() && item.status != DownloadState::Queued {
+                item.status = DownloadState::Failed;
+                item.error_message = Some("Download was interrupted: the application exited before completion.".to_string());
+                item.completed_at = Some(now.clone());
+            }
+        }
+    }
+
     /// Retries a previously failed or cancelled task.
     pub async fn retry_download<R: Runtime>(
         &self,
         task_id: &str,
         app: AppHandle<R>,
     ) -> Result<String, EngineError> {
-        let (request, next_attempt, next_pos) = {
-            let items = self.items.read().await;
-            let item = items.iter().find(|i| i.id == task_id).ok_or_else(|| {
-                EngineError::not_found(format!("Task '{}' not found in queue", task_id))
-            })?;
+        // Ensure no active process is currently running for this task
+        {
+            let handles = self.active_handles.lock().await;
+            if let Some(h) = handles.get(task_id) {
+                if !h.is_cancelled.load(Ordering::SeqCst) {
+                    return Err(EngineError::duplicate_process(format!(
+                        "Task '{}' is currently running and cannot be retried",
+                        task_id
+                    )));
+                }
+            }
+        }
 
-            if item.status.is_active() {
+        // Clean up any stale cancellation handle
+        {
+            let mut handles = self.active_handles.lock().await;
+            handles.remove(task_id);
+        }
+
+        let (request, next_attempt, _next_pos) = {
+            let mut items = self.items.write().await;
+            let item_pos = items.iter().position(|i| i.id == task_id);
+
+            let idx = match item_pos {
+                Some(i) => i,
+                None => {
+                    // Item not in memory: load from database
+                    let db_item = {
+                        let conn = self.db.conn.lock().map_err(|e| {
+                            EngineError::io(format!("Database error during retry lookup: {}", e))
+                        })?;
+                        fetch_download_by_id(&conn, task_id).map_err(|e| {
+                            EngineError::io(format!("Failed to fetch task from database: {}", e))
+                        })?
+                    };
+
+                    if let Some(mut loaded) = db_item {
+                        loaded.status = DownloadState::Queued;
+                        items.push(loaded);
+                        items.len() - 1
+                    } else {
+                        return Err(EngineError::not_found(format!(
+                            "Task '{}' not found in queue or database",
+                            task_id
+                        )));
+                    }
+                }
+            };
+
+            if items[idx].status.is_active() && items[idx].status != DownloadState::Queued {
                 return Err(EngineError::duplicate_process(format!(
                     "Task '{}' is currently active and cannot be retried",
                     task_id
@@ -594,18 +702,49 @@ impl QueueManager {
 
             let max_pos = items
                 .iter()
-                .filter(|i| i.status == DownloadState::Queued)
+                .filter(|i| i.status == DownloadState::Queued && i.id != task_id)
                 .map(|i| i.queue_position)
                 .max()
                 .map(|p| p + 1)
                 .unwrap_or(0);
 
-            (item.request.clone(), item.attempt_count + 1, max_pos)
+            let next_attempt = items[idx].attempt_count + 1;
+            let request = items[idx].request.clone();
+
+            let item = &mut items[idx];
+            item.status = DownloadState::Queued;
+            item.attempt_count = next_attempt;
+            item.queue_position = max_pos;
+            item.started_at = None;
+            item.completed_at = None;
+            item.error_message = None;
+            item.progress = None;
+
+            (request, next_attempt, max_pos)
         };
 
         // Revalidate URL and output destination before retrying
         validate_url(&request.webpage_url)?;
         validate_output_directory(&request.output_directory)?;
+
+        // Revalidate tools: yt-dlp binary and ffmpeg if audio
+        let (custom_ytdlp, custom_ffmpeg) = {
+            let conn = match self.db.conn.lock() {
+                Ok(c) => c,
+                Err(_) => return Err(EngineError::io("Database lock failed")),
+            };
+            let s = crate::database::load_app_settings(&conn);
+            (s.custom_ytdlp_path, s.custom_ffmpeg_path)
+        };
+
+        if ToolResolver::resolve_tool(ToolType::YtDlp, custom_ytdlp.as_deref()).is_none() {
+            return Err(EngineError::not_found("yt-dlp executable could not be resolved for retry"));
+        }
+        if request.media_type == MediaType::Audio {
+            if ToolResolver::resolve_tool(ToolType::Ffmpeg, custom_ffmpeg.as_deref()).is_none() {
+                return Err(EngineError::not_found("FFmpeg executable could not be resolved for audio retry"));
+            }
+        }
 
         let now = Utc::now().to_rfc3339();
 
@@ -622,20 +761,6 @@ impl QueueManager {
                 .map_err(|e| EngineError::io(format!("Failed to update status on retry: {}", e)))?;
         }
 
-        // 2. Update memory state
-        {
-            let mut items = self.items.write().await;
-            if let Some(item) = items.iter_mut().find(|i| i.id == task_id) {
-                item.status = DownloadState::Queued;
-                item.attempt_count = next_attempt;
-                item.queue_position = next_pos;
-                item.started_at = None;
-                item.completed_at = None;
-                item.error_message = None;
-                item.progress = None;
-            }
-        }
-
         let _ = app.emit(
             EVENT_TASK_RETRIED,
             &serde_json::json!({
@@ -645,7 +770,7 @@ impl QueueManager {
         );
         self.emit_queue_updated(&app).await;
 
-        // 3. Schedule next
+        // 2. Schedule next
         self.schedule_next(app).await;
 
         Ok(task_id.to_string())

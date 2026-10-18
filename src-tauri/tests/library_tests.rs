@@ -427,3 +427,30 @@ fn test_explicit_file_deletion() {
         .unwrap();
     assert_eq!(updated.file_availability, FileAvailability::Missing);
 }
+
+#[test]
+fn test_delete_failed_item_and_clean_removal() {
+    let conn = setup_test_db();
+
+    // Failed item with no output_path
+    let item = create_mock_queue_item(
+        "failed-task-1",
+        "Interrupted Video",
+        Some("Artist"),
+        DownloadState::Failed,
+        MediaType::Video,
+        None,
+        10,
+    );
+    insert_or_update_download(&conn, &item).unwrap();
+
+    // Deleting disk file when output_path is None should not error
+    let del_res = delete_media_file_on_disk(&conn, "failed-task-1");
+    assert!(del_res.is_ok());
+
+    // Deleting history record should completely remove it
+    delete_history_record(&conn, "failed-task-1").unwrap();
+    let fetched = fetch_media_item_by_id(&conn, "failed-task-1").unwrap();
+    assert!(fetched.is_none());
+}
+

@@ -475,6 +475,8 @@ pub fn relink_media_item(
 
 /// Deletes a download history record without touching files on disk.
 pub fn delete_history_record(conn: &Connection, id: &str) -> Result<()> {
+    let _ = conn.execute("DELETE FROM download_attempts WHERE download_id = ?1", params![id]);
+    let _ = conn.execute("DELETE FROM history WHERE id = ?1", params![id]);
     conn.execute("DELETE FROM downloads WHERE id = ?1", params![id])?;
     Ok(())
 }

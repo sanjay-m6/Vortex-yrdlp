@@ -80,8 +80,9 @@ impl ToolResolver {
             }
         }
 
-        // Canonicalize if possible, otherwise return path
-        Ok(path.canonicalize().unwrap_or_else(|_| path.to_path_buf()))
+        // Canonicalize if possible, strip UNC prefix on Windows, otherwise return path
+        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        Ok(crate::downloader::validation::strip_unc_prefix(canonical))
     }
 
     /// Resolves executable path using the explicit priority order:

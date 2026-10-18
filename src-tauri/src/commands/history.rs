@@ -117,6 +117,20 @@ pub async fn delete_library_file(id: String, state: State<'_, AppState>) -> Resu
 }
 
 #[command]
+pub async fn delete_media_item(
+    id: String,
+    delete_file: bool,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
+    if delete_file {
+        // Attempt to clean up physical file/partial files on disk, ignoring error if file is already absent
+        let _ = delete_media_file_on_disk(&conn, &id);
+    }
+    delete_history_record(&conn, &id).map_err(|e| e.to_string())
+}
+
+#[command]
 pub async fn retry_failed_download<R: Runtime>(
     id: String,
     app: AppHandle<R>,

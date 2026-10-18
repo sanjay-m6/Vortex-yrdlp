@@ -24,83 +24,91 @@ interface QueueStoreState {
   clearFailed: () => Promise<void>;
 }
 
+let globalQueueUnlisteners: Array<() => void> = [];
+let isAttachingQueueListeners = false;
+
 export const useQueueStore = create<QueueStoreState>((set, get) => ({
   snapshot: null,
   isLoading: false,
   isInitialized: false,
 
   init: async () => {
-    if (get().isInitialized) return () => {};
+    // Always refresh the current queue state
+    await get().refresh();
 
-    set({ isLoading: true });
-    try {
-      const snap = await queueApi.getQueueSnapshot();
-      set({ snapshot: snap, isInitialized: true, isLoading: false });
-    } catch (e) {
-      console.error("Failed to load initial queue snapshot:", e);
-      set({ isLoading: false });
+    if (globalQueueUnlisteners.length > 0 || isAttachingQueueListeners) {
+      return () => {};
     }
 
-    // Set up real-time listener for queue updates
-    const unlistenQueue = await queueApi.listenQueueUpdated((snap) => {
-      set({ snapshot: snap });
-    });
-
-    const unlistenProgress = await queueApi.listenTaskProgress((progress) => {
-      set((state) => {
-        if (!state.snapshot) return state;
-        const updatedItems = state.snapshot.items.map((item) => {
-          if (item.id === progress.taskId) {
-            return {
-              ...item,
-              status: progress.state,
-              progress,
-              downloadedBytes: progress.downloadedBytes,
-              totalBytes: progress.totalBytes,
-              outputPath: progress.outputPath || item.outputPath,
-            };
-          }
-          return item;
-        });
-
-        return {
-          snapshot: {
-            ...state.snapshot,
-            items: updatedItems,
-          },
-        };
+    isAttachingQueueListeners = true;
+    try {
+      // Set up real-time listener for queue updates
+      const unlistenQueue = await queueApi.listenQueueUpdated((snap) => {
+        set({ snapshot: snap });
       });
-    });
 
-    const unlistenCompleted = await queueApi.listenTaskCompleted((data) => {
-      set((state) => {
-        if (!state.snapshot) return state;
-        const updatedItems = state.snapshot.items.map((item) => {
-          if (item.id === data.taskId) {
-            return {
-              ...item,
-              status: "completed" as const,
-              outputPath: data.outputPath,
-              completedAt: new Date().toISOString(),
-            };
-          }
-          return item;
+      const unlistenProgress = await queueApi.listenTaskProgress((progress) => {
+        set((state) => {
+          if (!state.snapshot) return state;
+          const updatedItems = state.snapshot.items.map((item) => {
+            if (item.id === progress.taskId) {
+              return {
+                ...item,
+                status: progress.state,
+                progress,
+                downloadedBytes: progress.downloadedBytes,
+                totalBytes: progress.totalBytes,
+                outputPath: progress.outputPath || item.outputPath,
+              };
+            }
+            return item;
+          });
+
+          return {
+            snapshot: {
+              ...state.snapshot,
+              items: updatedItems,
+            },
+          };
         });
-        return {
-          snapshot: {
-            ...state.snapshot,
-            items: updatedItems,
-            activeCount: Math.max(0, state.snapshot.activeCount - 1),
-            completedCount: state.snapshot.completedCount + 1,
-          },
-        };
       });
-    });
+
+      const unlistenCompleted = await queueApi.listenTaskCompleted((data) => {
+        set((state) => {
+          if (!state.snapshot) return state;
+          const updatedItems = state.snapshot.items.map((item) => {
+            if (item.id === data.taskId) {
+              return {
+                ...item,
+                status: "completed" as const,
+                outputPath: data.outputPath,
+                completedAt: new Date().toISOString(),
+              };
+            }
+            return item;
+          });
+          return {
+            snapshot: {
+              ...state.snapshot,
+              items: updatedItems,
+              activeCount: Math.max(0, state.snapshot.activeCount - 1),
+              completedCount: state.snapshot.completedCount + 1,
+            },
+          };
+        });
+      });
+
+      globalQueueUnlisteners = [unlistenQueue, unlistenProgress, unlistenCompleted];
+      set({ isInitialized: true, isLoading: false });
+    } catch (e) {
+      console.error("Failed to attach queue listeners:", e);
+      set({ isLoading: false });
+    } finally {
+      isAttachingQueueListeners = false;
+    }
 
     return () => {
-      unlistenQueue();
-      unlistenProgress();
-      unlistenCompleted();
+      // Retain persistent listeners across page navigation
     };
   },
 
