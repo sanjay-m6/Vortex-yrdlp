@@ -228,8 +228,7 @@ pub struct DownloadSettings {
 
 impl Default for DownloadSettings {
     fn default() -> Self {
-        let download_dir = dirs::download_dir()
-            .unwrap_or_else(|| std::path::PathBuf::from("."))
+        let download_dir = crate::downloader::validation::default_downloads_dir()
             .to_string_lossy()
             .to_string();
 

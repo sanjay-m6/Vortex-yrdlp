@@ -36,6 +36,20 @@ pub fn strip_unc_prefix(path: PathBuf) -> PathBuf {
     }
 }
 
+/// Returns the default downloads directory, guaranteeing an absolute path across all platforms & headless environments.
+pub fn default_downloads_dir() -> PathBuf {
+    if let Some(dir) = dirs::download_dir() {
+        return dir;
+    }
+    if let Some(home) = dirs::home_dir() {
+        return home.join("Downloads");
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        return cwd;
+    }
+    std::env::temp_dir()
+}
+
 /// Validates that the output directory exists or can be created, has no path traversal, and is writable.
 pub fn validate_output_directory(dir_str: &str) -> Result<PathBuf, EngineError> {
     let trimmed = dir_str.trim();
@@ -54,13 +68,11 @@ pub fn validate_output_directory(dir_str: &str) -> Result<PathBuf, EngineError> 
 
     // Resolve relative path (or generic "Downloads") to the user's real downloads directory
     let path = if trimmed.eq_ignore_ascii_case("downloads") {
-        dirs::download_dir().unwrap_or_else(|| PathBuf::from("."))
+        default_downloads_dir()
     } else {
         let p = PathBuf::from(trimmed);
         if !p.is_absolute() {
-            dirs::download_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join(p)
+            default_downloads_dir().join(p)
         } else {
             p
         }

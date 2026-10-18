@@ -1,6 +1,6 @@
 use crate::downloader::AppState;
 use crate::models::DependencyStatus;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tauri::{command, State};
 
 #[command]
@@ -42,8 +42,7 @@ pub async fn pick_download_directory() -> Result<Option<String>, String> {
 
 #[command]
 pub async fn get_default_download_directory() -> Result<String, String> {
-    let dir = dirs::download_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
+    let dir = crate::downloader::validation::default_downloads_dir()
         .to_string_lossy()
         .to_string();
     Ok(dir)

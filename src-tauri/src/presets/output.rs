@@ -19,13 +19,11 @@ pub fn resolve_output_directory(
 ) -> Result<PathBuf, EngineError> {
     let trimmed = root_dir.trim();
     let root = if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("downloads") {
-        dirs::download_dir().unwrap_or_else(|| PathBuf::from("."))
+        crate::downloader::validation::default_downloads_dir()
     } else {
         let p = PathBuf::from(trimmed);
         if !p.is_absolute() {
-            dirs::download_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join(p)
+            crate::downloader::validation::default_downloads_dir().join(p)
         } else {
             p
         }
