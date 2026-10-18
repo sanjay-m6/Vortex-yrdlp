@@ -120,6 +120,17 @@ fn test_invalid_executable_paths_wrong_extension() {
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().kind, EngineErrorKind::InvalidPath);
     }
+
+    #[cfg(unix)]
+    {
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().kind, EngineErrorKind::PermissionDenied);
+    }
+
+    #[cfg(not(any(target_os = "windows", unix)))]
+    {
+        let _ = res;
+    }
 }
 
 // 4. Failed process startup
@@ -190,9 +201,22 @@ async fn test_duplicate_process_prevention() {
     let manager = ProcessManager::new();
     let emitter = Arc::new(RecordingEventEmitter::default());
 
-    // Create a temporary valid batch or executable to run
-    let temp_script = std::env::temp_dir().join("test_sleep_proc.cmd");
-    let _ = std::fs::write(&temp_script, "@echo off\r\nping 127.0.0.1 -n 3 > nul\r\n");
+    // Create a temporary valid batch or executable script to run
+    #[cfg(target_os = "windows")]
+    let temp_script = {
+        let script = std::env::temp_dir().join("test_sleep_proc.cmd");
+        let _ = std::fs::write(&script, "@echo off\r\nping 127.0.0.1 -n 3 > nul\r\n");
+        script
+    };
+
+    #[cfg(unix)]
+    let temp_script = {
+        use std::os::unix::fs::PermissionsExt;
+        let script = std::env::temp_dir().join("test_sleep_proc.sh");
+        let _ = std::fs::write(&script, "#!/bin/sh\nsleep 3\n");
+        let _ = std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755));
+        script
+    };
 
     let spawn_res1 = manager
         .spawn(
@@ -235,8 +259,21 @@ async fn test_process_cancellation() {
     let manager = ProcessManager::new();
     let emitter = Arc::new(RecordingEventEmitter::default());
 
-    let temp_script = std::env::temp_dir().join("test_cancel_proc.cmd");
-    let _ = std::fs::write(&temp_script, "@echo off\r\nping 127.0.0.1 -n 10 > nul\r\n");
+    #[cfg(target_os = "windows")]
+    let temp_script = {
+        let script = std::env::temp_dir().join("test_cancel_proc.cmd");
+        let _ = std::fs::write(&script, "@echo off\r\nping 127.0.0.1 -n 10 > nul\r\n");
+        script
+    };
+
+    #[cfg(unix)]
+    let temp_script = {
+        use std::os::unix::fs::PermissionsExt;
+        let script = std::env::temp_dir().join("test_cancel_proc.sh");
+        let _ = std::fs::write(&script, "#!/bin/sh\nsleep 10\n");
+        let _ = std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755));
+        script
+    };
 
     let spawn_res = manager
         .spawn(

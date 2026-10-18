@@ -593,7 +593,7 @@ async fn test_cancel_already_terminal_task() {
     // Cancel non-existent task returns false
     let res: Result<bool, vortex_lib::models::EngineError> =
         manager.cancel_download("non-existent-task").await;
-    assert_eq!(res.unwrap(), false);
+    assert!(!res.unwrap());
 }
 
 #[tokio::test]
