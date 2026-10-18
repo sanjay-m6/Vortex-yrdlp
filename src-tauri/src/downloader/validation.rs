@@ -188,21 +188,21 @@ pub fn build_ytdlp_args(
     );
 
     // 2. Output template and path
-    let template = if let Some(ref snapshot) = request.settings_snapshot {
-        snapshot
+    let template: String = match (&request.settings_snapshot, &request.filename_template) {
+        (Some(snapshot), _) => snapshot
             .filename_template
             .clone()
             .or_else(|| request.filename_template.clone())
-            .unwrap_or_else(|| "%(title).150B [%(id)s].%(ext)s".to_string())
-    } else if let Some(ref tpl) = request.filename_template {
-        let sanitized_tpl = sanitize_filename(tpl);
-        if sanitized_tpl.contains("%(") {
-            sanitized_tpl
-        } else {
-            format!("{}.%(ext)s", sanitized_tpl)
+            .unwrap_or_else(|| "%(title).150B [%(id)s].%(ext)s".to_string()),
+        (None, Some(tpl)) => {
+            let sanitized = sanitize_filename(tpl);
+            if sanitized.contains("%(") {
+                sanitized
+            } else {
+                format!("{}.%(ext)s", sanitized)
+            }
         }
-    } else {
-        "%(title).150B [%(id)s].%(ext)s".to_string()
+        (None, None) => "%(title).150B [%(id)s].%(ext)s".to_string(),
     };
 
     let output_target = output_dir.join(template);
