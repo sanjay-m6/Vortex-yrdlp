@@ -20,14 +20,21 @@ import { useNavigate } from "react-router-dom";
 import { useDownloadStore } from "../stores/downloadStore";
 import { DownloadCard } from "../components/download/DownloadCard";
 import { ErrorBoundary } from "../components/ui/ErrorBoundary";
+import { MobileDownloadsView } from "../components/mobile/MobileDownloadsView";
+import { useMobile } from "../hooks/useMobile";
 
 type TabFilter = "all" | "active" | "completed" | "failed";
 
 export const Downloads: React.FC = () => {
+  const isMobile = useMobile();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  if (isMobile) {
+    return <MobileDownloadsView />;
+  }
 
   const {
     tasks,

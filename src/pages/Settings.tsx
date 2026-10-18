@@ -11,8 +11,11 @@ import { EngineDetails } from "../components/engine/EngineDetails";
 import { DiagnosticsPanel } from "../components/engine/DiagnosticsPanel";
 import { EngineSetupDialog } from "../components/engine/EngineSetupDialog";
 import { AdvancedSettingsCard } from "../components/presets/AdvancedSettingsCard";
+import { MobileSettingsView } from "../components/mobile/MobileSettingsView";
+import { useMobile } from "../hooks/useMobile";
 
 export const Settings: React.FC = () => {
+  const isMobile = useMobile();
   const [setupDialogOpen, setSetupDialogOpen] = useState(false);
   const { switchThemeWithSplash } = useTheme();
   const {
@@ -23,6 +26,10 @@ export const Settings: React.FC = () => {
     minimizeToTray,
     updateSettings,
   } = useSettingsStore();
+
+  if (isMobile) {
+    return <MobileSettingsView />;
+  }
 
   const { showToast } = useAppStore();
 

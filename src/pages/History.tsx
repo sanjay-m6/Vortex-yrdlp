@@ -28,9 +28,17 @@ import { MediaDetailsModal } from "../components/library/MediaDetailsModal";
 import { DeleteFileConfirmModal } from "../components/library/DeleteFileConfirmModal";
 import { RelinkModal } from "../components/library/RelinkModal";
 import { MediaLibraryItem } from "../types";
+import { MobileLibraryView } from "../components/mobile/MobileLibraryView";
+import { useMobile } from "../hooks/useMobile";
 
 export const History: React.FC = () => {
+  const isMobile = useMobile();
   const navigate = useNavigate();
+
+  if (isMobile) {
+    return <MobileLibraryView />;
+  }
+
   const {
     items,
     summary,

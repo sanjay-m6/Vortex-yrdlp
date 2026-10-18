@@ -28,9 +28,17 @@ import { DownloadCard } from "../components/download/DownloadCard";
 import { useQueueStore } from "../stores/queueStore";
 import { QueueItem, QueuePriority } from "../types";
 import { downloadApi } from "../lib/downloadApi";
+import { MobileQueueView } from "../components/mobile/MobileQueueView";
+import { useMobile } from "../hooks/useMobile";
 
 export const Queue: React.FC = () => {
+  const isMobile = useMobile();
   const navigate = useNavigate();
+
+  if (isMobile) {
+    return <MobileQueueView />;
+  }
+
   const {
     snapshot,
     isLoading,
