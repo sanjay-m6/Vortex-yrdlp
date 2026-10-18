@@ -182,11 +182,14 @@ pub async fn download_ytdlp_internal(app: Option<&tauri::AppHandle>) -> Result<S
     let mut last_emit = std::time::Instant::now();
 
     while let Some(chunk_result) = stream.next().await {
-        let chunk = chunk_result.map_err(|e| format!("Network error while reading yt-dlp stream: {}", e))?;
+        let chunk = chunk_result
+            .map_err(|e| format!("Network error while reading yt-dlp stream: {}", e))?;
         downloaded += chunk.len() as u64;
         bytes.extend_from_slice(&chunk);
 
-        if last_emit.elapsed() >= std::time::Duration::from_millis(150) || downloaded == total_size.unwrap_or(0) {
+        if last_emit.elapsed() >= std::time::Duration::from_millis(150)
+            || downloaded == total_size.unwrap_or(0)
+        {
             last_emit = std::time::Instant::now();
             let percent = match total_size {
                 Some(total) if total > 0 => ((downloaded as f64 / total as f64) * 100.0).min(100.0),
@@ -205,7 +208,11 @@ pub async fn download_ytdlp_internal(app: Option<&tauri::AppHandle>) -> Result<S
                             "Downloading yt-dlp: {:.1} MB{}",
                             downloaded as f64 / (1024.0 * 1024.0),
                             match total_size {
-                                Some(t) => format!(" / {:.1} MB ({:.0}%)", t as f64 / (1024.0 * 1024.0), percent),
+                                Some(t) => format!(
+                                    " / {:.1} MB ({:.0}%)",
+                                    t as f64 / (1024.0 * 1024.0),
+                                    percent
+                                ),
                                 None => "".to_string(),
                             }
                         ),
@@ -364,7 +371,10 @@ pub async fn download_ffmpeg_internal(app: Option<&tauri::AppHandle>) -> Result<
         }
 
         let zip_bytes = downloaded_bytes.ok_or_else(|| {
-            format!("Failed to download FFmpeg from all mirrors. Last error: {}", last_error)
+            format!(
+                "Failed to download FFmpeg from all mirrors. Last error: {}",
+                last_error
+            )
         })?;
 
         if let Some(app_handle) = app {
