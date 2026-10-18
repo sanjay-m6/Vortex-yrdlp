@@ -142,3 +142,21 @@ export interface AppUpdateInfo {
   statusMessage: string;
 }
 
+export interface ToolDownloadProgressPayload {
+  tool: string;
+  stage: "starting" | "downloading" | "extracting" | "verifying" | "completed" | "failed";
+  percentage: number;
+  downloadedBytes: number;
+  totalBytes: number | null;
+  message: string;
+}
+
+export interface EssentialToolsInstallResult {
+  success: boolean;
+  ytdlpInstalled: boolean;
+  ytdlpVersion: string | null;
+  ffmpegInstalled: boolean;
+  ffmpegVersion: string | null;
+  message: string;
+}
+

@@ -209,6 +209,25 @@ export const Settings: React.FC = () => {
           <span>Downloader Engine Integration</span>
         </div>
 
+        <div className="flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-cyan-500/10 border border-indigo-500/20">
+          <div>
+            <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">
+              Essential Engines Setup Wizard
+            </h4>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              One-click automated download and verification of official yt-dlp & FFmpeg binaries.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent("open_onboarding", { detail: { step: 2 } }))}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-semibold shadow-xs active:scale-95 transition-all cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Launch Wizard</span>
+          </button>
+        </div>
+
         <EngineStatusCard
           onOpenSetup={() => setSetupDialogOpen(true)}
           onOpenDiagnostics={() => {

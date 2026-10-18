@@ -107,30 +107,30 @@ export const Header: React.FC = () => {
           </div>
         ) : isReady ? (
           <button
-            onClick={() => navigate("/settings")}
+            onClick={() => window.dispatchEvent(new CustomEvent("open_onboarding", { detail: { step: 2 } }))}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold cursor-pointer hover:bg-emerald-500/20 transition-colors"
-            title={`yt-dlp v${status?.ytdlp?.version || "Ready"} — Click to configure`}
+            title={`yt-dlp v${status?.ytdlp?.version || "Ready"} & FFmpeg — Click to view setup`}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <span className="hidden md:inline">Engine Ready</span>
           </button>
         ) : isMissing ? (
           <button
-            onClick={() => navigate("/settings")}
+            onClick={() => window.dispatchEvent(new CustomEvent("open_onboarding", { detail: { step: 2 } }))}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-semibold cursor-pointer hover:bg-amber-500/20 transition-colors"
-            title="yt-dlp is not installed. Click to setup."
+            title="Essential engines missing. Click to download and install automatically."
           >
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            <span>Setup Engine</span>
+            <span>Setup Engines</span>
           </button>
         ) : (
           <button
-            onClick={() => navigate("/settings")}
+            onClick={() => window.dispatchEvent(new CustomEvent("open_onboarding", { detail: { step: 2 } }))}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-[10px] font-semibold cursor-pointer hover:bg-rose-500/20 transition-colors"
-            title="Engine verification failed. Click for diagnostics."
+            title="Engine verification failed. Click to repair or re-download."
           >
             <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-            <span>Engine Error</span>
+            <span>Repair Engine</span>
           </button>
         )}
 

@@ -237,6 +237,19 @@ export const MobileSettingsView: React.FC = () => {
         </div>
 
         {/* Diagnostics Button */}
+        {/* Download Essential Engines Wizard Button */}
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent("open_onboarding", { detail: { step: 2 } }))}
+          className="w-full flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 text-xs font-semibold text-indigo-600 dark:text-indigo-400 active:scale-[0.99] transition-all cursor-pointer"
+        >
+          <div className="flex items-center gap-2">
+            <Download className="w-4 h-4" />
+            <span>Download All Essential Engines (Setup Wizard)</span>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+        </button>
+
         <button
           type="button"
           onClick={handleRunDiagnostics}

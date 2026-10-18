@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Sun, Moon, Heart, ArrowDownCircle } from "lucide-react";
+import { Sun, Moon, Heart, ArrowDownCircle, Cpu } from "lucide-react";
 import { useDownloadStore } from "../../stores/downloadStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useTheme } from "../../hooks/useTheme";
+import { useEngineStatus } from "../../hooks/useEngineStatus";
 import { DonateModal } from "../ui/DonateModal";
 
 export const MobileHeader: React.FC = () => {
@@ -11,6 +12,7 @@ export const MobileHeader: React.FC = () => {
   const activeCount = useDownloadStore((s) => s.activeCount);
   const theme = useSettingsStore((s) => s.theme);
   const { switchThemeWithSplash } = useTheme();
+  const { isReady } = useEngineStatus();
   const [donateOpen, setDonateOpen] = useState(false);
 
   const isDark =
@@ -59,6 +61,21 @@ export const MobileHeader: React.FC = () => {
 
           {/* Quick Header Actions */}
           <div className="flex items-center gap-1.5">
+            {/* Engine Setup Wizard Trigger */}
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent("open_onboarding", { detail: { step: 2 } }))}
+              aria-label="Engine Setup Wizard"
+              className={`p-2 rounded-xl border active:scale-95 transition-all cursor-pointer ${
+                isReady
+                  ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20"
+                  : "text-amber-500 bg-amber-500/10 border-amber-500/20 animate-pulse"
+              }`}
+              title={isReady ? "Engines Ready — Click to manage" : "Engines Missing — Click to download"}
+            >
+              <Cpu className="w-4 h-4" />
+            </button>
+
             {/* Active Download Beacon */}
             {activeCount > 0 && (
               <button

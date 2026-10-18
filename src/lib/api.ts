@@ -9,6 +9,8 @@ import {
   MediaMetadata,
   SystemDiagnosticReport,
   AppUpdateInfo,
+  ToolDownloadProgressPayload,
+  EssentialToolsInstallResult,
 } from "../types";
 
 export const api = {
@@ -30,6 +32,26 @@ export const api = {
 
   downloadLatestYtdlp: async (): Promise<string> => {
     return invoke("download_latest_ytdlp");
+  },
+
+  downloadLatestFfmpeg: async (): Promise<string> => {
+    return invoke("download_latest_ffmpeg");
+  },
+
+  downloadAllEssentialTools: async (): Promise<EssentialToolsInstallResult> => {
+    return invoke("download_all_essential_tools");
+  },
+
+  onToolDownloadProgress: async (
+    callback: (payload: ToolDownloadProgressPayload) => void
+  ): Promise<UnlistenFn> => {
+    return listen<ToolDownloadProgressPayload>("tool_download_progress", (event) => {
+      callback(event.payload);
+    });
+  },
+
+  appShowWindow: async (): Promise<void> => {
+    return invoke("app_show_window");
   },
 
   analyzeMediaUrl: async (url: string): Promise<MediaMetadata> => {
