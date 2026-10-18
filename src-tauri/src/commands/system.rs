@@ -97,8 +97,24 @@ pub async fn download_latest_ytdlp() -> Result<String, String> {
         let _ = std::fs::create_dir_all(&target_dir);
     }
 
-    let target_exe = target_dir.join("yt-dlp.exe");
-    let temp_exe = target_dir.join("yt-dlp.exe.download.tmp");
+    #[cfg(target_os = "windows")]
+    let (download_url, bin_name) = (
+        "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe",
+        "yt-dlp.exe",
+    );
+    #[cfg(target_os = "macos")]
+    let (download_url, bin_name) = (
+        "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos",
+        "yt-dlp",
+    );
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    let (download_url, bin_name) = (
+        "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux",
+        "yt-dlp",
+    );
+
+    let target_exe = target_dir.join(bin_name);
+    let temp_exe = target_dir.join(format!("{}.download.tmp", bin_name));
 
     let client = reqwest::Client::builder()
         .user_agent("Vortex/1.0.0")
@@ -106,7 +122,7 @@ pub async fn download_latest_ytdlp() -> Result<String, String> {
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     let res = client
-        .get("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe")
+        .get(download_url)
         .send()
         .await
         .map_err(|e| format!("Failed to download yt-dlp: {}", e))?;
@@ -120,7 +136,7 @@ pub async fn download_latest_ytdlp() -> Result<String, String> {
         .await
         .map_err(|e| format!("Failed to read binary bytes: {}", e))?;
 
-    // Verify minimum expected size (yt-dlp.exe is at least 5 MB)
+    // Verify minimum expected size (yt-dlp is at least 1 MB)
     if bytes.len() < 1_000_000 {
         return Err("Downloaded binary file is too small or incomplete".to_string());
     }
@@ -134,6 +150,13 @@ pub async fn download_latest_ytdlp() -> Result<String, String> {
     tokio::fs::rename(&temp_exe, &target_exe)
         .await
         .map_err(|e| format!("Failed to replace yt-dlp executable: {}", e))?;
+
+    // On Unix systems, set executable permissions (rwxr-xr-x / 0o755)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&target_exe, std::fs::Permissions::from_mode(0o755));
+    }
 
     Ok(target_exe.to_string_lossy().to_string())
 }

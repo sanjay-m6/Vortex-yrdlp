@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 use std::fs::File;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::database::{
     fetch_completed_downloads_for_verification, fetch_media_item_by_id, relink_media_item,
@@ -224,7 +224,7 @@ pub fn open_containing_folder(path_str: &str) -> Result<(), EngineError> {
     {
         use std::os::windows::process::CommandExt;
         let clean_path = trimmed.replace('/', "\\");
-        let path = PathBuf::from(&clean_path);
+        let path = Path::new(&clean_path);
 
         if path.exists() {
             if path.is_file() {
@@ -267,6 +267,9 @@ pub fn open_containing_folder(path_str: &str) -> Result<(), EngineError> {
         ))
     }
 
+    #[cfg(not(target_os = "windows"))]
+    let path = Path::new(trimmed);
+
     #[cfg(target_os = "macos")]
     {
         if path.exists() {
@@ -290,9 +293,9 @@ pub fn open_containing_folder(path_str: &str) -> Result<(), EngineError> {
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         let target_dir = if path.is_file() {
-            path.parent().unwrap_or(&path)
+            path.parent().unwrap_or(path)
         } else {
-            &path
+            path
         };
         open::that_detached(target_dir)
             .map_err(|e| EngineError::execution_failed(format!("Failed to open directory: {}", e)))
