@@ -185,10 +185,7 @@ pub async fn get_task_attempts(
 }
 
 #[command]
-pub async fn open_downloaded_file(
-    path: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn open_downloaded_file(path: String, state: State<'_, AppState>) -> Result<(), String> {
     let trimmed = path.trim();
     if trimmed.is_empty() {
         return Err("File path is empty".to_string());
@@ -230,10 +227,7 @@ pub async fn open_downloaded_file(
 }
 
 #[command]
-pub async fn open_download_folder(
-    path: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn open_download_folder(path: String, state: State<'_, AppState>) -> Result<(), String> {
     let trimmed = path.trim();
     if trimmed.is_empty() {
         return Err("Path is empty".to_string());
@@ -279,10 +273,11 @@ pub async fn open_download_folder(
 
     #[cfg(target_os = "windows")]
     {
+        use std::os::windows::process::CommandExt;
         let clean_str = direct_path.to_string_lossy().replace('/', "\\");
         if direct_path.is_file() {
             let status = std::process::Command::new("explorer.exe")
-                .arg(format!("/select,{}", clean_str))
+                .raw_arg(format!("/select,\"{}\"", clean_str))
                 .spawn();
             if status.is_ok() {
                 return Ok(());
@@ -297,6 +292,12 @@ pub async fn open_download_folder(
                 .map(|p| p.to_string_lossy().replace('/', "\\"))
                 .unwrap_or(clean_str)
         };
+        let status = std::process::Command::new("explorer.exe")
+            .raw_arg(format!("\"{}\"", dir))
+            .spawn();
+        if status.is_ok() {
+            return Ok(());
+        }
         open::that_detached(dir).map_err(|e| format!("Failed to open folder: {}", e))
     }
 

@@ -1,0 +1,366 @@
+name: Release - Multi-Platform Distribution
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+      draft:
+        description: 'Create draft release'
+        required: false
+        type: boolean
+        default: false
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
+      include_android:
+        description: 'Include Android APK build'
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  verify-version:
+    name: Validate Release Version & Notes
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.version_info.outputs.tag_name }}
+      version_bare: ${{ steps.version_info.outputs.version_bare }}
+      is_draft: ${{ steps.version_info.outputs.is_draft }}
+      is_prerelease: ${{ steps.version_info.outputs.is_prerelease }}
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute Release Version & Validate SemVer
+        id: version_info
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            INPUT_TAG="${{ github.event.inputs.version }}"
+            IS_DRAFT="${{ github.event.inputs.draft }}"
+            IS_PRERELEASE="${{ github.event.inputs.prerelease }}"
+          else
+            INPUT_TAG="${{ github.ref_name }}"
+            IS_DRAFT="false"
+            IS_PRERELEASE="false"
+          fi
+
+          # Ensure 'v' prefix
+          if [[ "$INPUT_TAG" =~ ^v[0-9]+ ]]; then
+            TAG_NAME="$INPUT_TAG"
+            VERSION_BARE="${INPUT_TAG#v}"
+          elif [[ "$INPUT_TAG" =~ ^[0-9]+ ]]; then
+            TAG_NAME="v$INPUT_TAG"
+            VERSION_BARE="$INPUT_TAG"
+          else
+            echo "::error::Invalid SemVer release tag: $INPUT_TAG (expected e.g. v1.0.0 or 1.0.0)"
+            exit 1
+          fi
+
+          echo "Validated Release Tag: $TAG_NAME"
+          echo "Bare Version: $VERSION_BARE"
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "version_bare=$VERSION_BARE" >> $GITHUB_OUTPUT
+          echo "is_draft=$IS_DRAFT" >> $GITHUB_OUTPUT
+          echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+
+  ci-gate:
+    name: CI Pre-Release Validation
+    needs: [verify-version]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      - name: TypeScript Contract Validation
+        run: npx tsc --noEmit
+
+      - name: Production Frontend Bundle Build
+        run: npm run build
+
+      - name: Install Linux Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Setup Rust Stable Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust Formatting Verification
+        run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
+
+      - name: Rust Clippy Verification
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+
+      - name: Rust Automated Test Suite
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+  build-desktop:
+    name: Build Desktop - ${{ matrix.platform_name }}
+    needs: [verify-version, ci-gate]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            platform_name: 'Windows x64'
+            artifact_key: 'windows-x64'
+            args: '--bundles nsis'
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            platform_name: 'Linux x64'
+            artifact_key: 'linux-x64'
+            args: '--bundles deb,appimage'
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            platform_name: 'macOS Apple Silicon'
+            artifact_key: 'macos-arm64'
+            args: '--bundles dmg'
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Linux System Dependencies for Tauri 2
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Setup Rust Stable Toolchain (${{ matrix.target }})
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Cargo Dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      - name: Build Tauri Desktop Distribution Package
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          args: ${{ matrix.args }}
+          tagName: ''
+
+      - name: Stage Release Artifacts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release-stage | Out-Null
+          Get-ChildItem -Path "src-tauri/target/release/bundle/nsis/*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
+            Copy-Item -Path $_.FullName -Destination "release-stage/"
+          }
+          Get-ChildItem -Path "src-tauri/target/release/bundle/msi/*.msi" -ErrorAction SilentlyContinue | ForEach-Object {
+            Copy-Item -Path $_.FullName -Destination "release-stage/"
+          }
+
+      - name: Stage Release Artifacts (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p release-stage
+          find src-tauri/target/release/bundle/deb/ -name "*.deb" -exec cp {} release-stage/ \; 2>/dev/null || true
+          find src-tauri/target/release/bundle/appimage/ -name "*.AppImage" -exec cp {} release-stage/ \; 2>/dev/null || true
+
+      - name: Stage Release Artifacts (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p release-stage
+          find src-tauri/target/release/bundle/dmg/ -name "*.dmg" -exec cp {} release-stage/ \; 2>/dev/null || true
+
+      - name: Upload ${{ matrix.platform_name }} Release Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.artifact_key }}
+          path: release-stage/*
+          if-no-files-found: error
+          retention-days: 7
+
+  build-android:
+    name: Build Mobile - Android APK
+    needs: [verify-version, ci-gate]
+    if: github.event_name != 'workflow_dispatch' || inputs.include_android == true
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17 Development Kit
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 17
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Setup Rust Stable Toolchain & Android Targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Cache Cargo Dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      - name: Setup Android SDK & NDK Environment
+        run: |
+          if [ -z "$ANDROID_HOME" ]; then
+            export ANDROID_HOME="/usr/local/lib/android/sdk"
+          fi
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          NDK_DIR=$(find "$ANDROID_HOME/ndk" -maxdepth 1 -mindepth 1 | sort -V | tail -n 1)
+          if [ -z "$NDK_DIR" ]; then
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;26.1.10909125"
+            NDK_DIR="$ANDROID_HOME/ndk/26.1.10909125"
+          fi
+          echo "NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
+
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      - name: Verify Android Gradle Permissions
+        run: |
+          if [ ! -d "src-tauri/gen/android" ]; then
+            npx tauri android init --ci --skip-targets-install
+          fi
+          if [ -f "src-tauri/gen/android/gradlew" ]; then
+            chmod +x src-tauri/gen/android/gradlew
+          fi
+
+      - name: Build Android APK
+        run: |
+          npm run tauri android build -- --ci --apk
+
+      - name: Stage Android Release Artifacts
+        run: |
+          mkdir -p release-android
+          find src-tauri/gen/android/app/build/outputs/apk/ -name "*.apk" -exec cp {} release-android/ \; 2>/dev/null || true
+          ls -la release-android/
+
+      - name: Upload Android Release Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-android-apk
+          path: release-android/*
+          if-no-files-found: warn
+          retention-days: 7
+
+  publish-github-release:
+    name: Collate Artifacts, Checksums & Publish Release
+    needs: [verify-version, build-desktop, build-android]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Download All Release Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: raw-artifacts/
+
+      - name: Collate Assets & Generate SHA-256 Checksums
+        id: collate
+        run: |
+          mkdir -p final-release-assets
+          find raw-artifacts/ -type f \( -name "*.exe" -o -name "*.msi" -o -name "*.deb" -o -name "*.AppImage" -o -name "*.dmg" -o -name "*.apk" -o -name "*.aab" -o -name "*.sig" \) -exec cp {} final-release-assets/ \;
+
+          echo "=== Collated Release Files ==="
+          ls -la final-release-assets/
+
+          cd final-release-assets
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          cd ..
+
+      - name: Extract Release Notes
+        id: notes
+        run: |
+          VERSION="${{ needs.verify-version.outputs.version_bare }}"
+          TAG="${{ needs.verify-version.outputs.tag_name }}"
+          
+          if [ -f "RELEASE_NOTES.md" ]; then
+            cat RELEASE_NOTES.md > release_notes.txt
+          else
+            echo "### Vortex $TAG Release" > release_notes.txt
+            echo "" >> release_notes.txt
+            echo "Automated multi-platform distribution release." >> release_notes.txt
+          fi
+
+      - name: Publish Official GitHub Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ needs.verify-version.outputs.tag_name }}
+          name: Vortex ${{ needs.verify-version.outputs.tag_name }}
+          body_path: release_notes.txt
+          draft: ${{ needs.verify-version.outputs.is_draft == 'true' }}
+          prerelease: ${{ needs.verify-version.outputs.is_prerelease == 'true' }}
+          files: |
+            final-release-assets/*

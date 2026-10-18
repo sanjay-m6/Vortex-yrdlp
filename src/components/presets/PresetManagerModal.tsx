@@ -149,10 +149,10 @@ export const PresetManagerModal: React.FC<PresetManagerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-3xl bg-white/95 dark:bg-slate-900/95 border border-black/10 dark:border-white/10 shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="w-full max-w-4xl h-[86vh] max-h-[660px] min-h-[460px] flex flex-col rounded-2xl bg-white/95 dark:bg-[#0f172a]/95 border border-black/10 dark:border-white/10 shadow-2xl overflow-hidden backdrop-blur-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
+        <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-black/[0.06] dark:border-white/[0.06] bg-black/[0.01] dark:bg-white/[0.01]">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
               <Sliders className="w-4 h-4" />
@@ -186,9 +186,9 @@ export const PresetManagerModal: React.FC<PresetManagerModalProps> = ({
         </div>
 
         {/* Content Body: Sidebar List + Editor Details */}
-        <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-black/[0.06] dark:divide-white/[0.06]">
+        <div className="flex-1 min-h-0 overflow-hidden grid grid-cols-1 md:grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-black/[0.06] dark:divide-white/[0.06]">
           {/* Preset Sidebar */}
-          <div className="md:col-span-4 p-4 overflow-y-auto space-y-2">
+          <div className="md:col-span-4 h-full min-h-0 overflow-y-auto p-4 space-y-2">
             <div className="flex items-center justify-between pb-2">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Profiles ({presets.length})
@@ -251,7 +251,8 @@ export const PresetManagerModal: React.FC<PresetManagerModalProps> = ({
           </div>
 
           {/* Preset Editor Details */}
-          <div className="md:col-span-8 p-6 overflow-y-auto space-y-5">
+          <div className="md:col-span-8 h-full min-h-0 flex flex-col overflow-hidden bg-white/40 dark:bg-slate-950/20">
+            <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
             {currentPreset && (
               <>
                 {/* Name & Description */}
@@ -520,9 +521,21 @@ export const PresetManagerModal: React.FC<PresetManagerModalProps> = ({
                     }}
                   />
                 </div>
+              </>
+            )}
+          </div>
 
-                {/* Action Buttons */}
-                <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-black/[0.06] dark:border-white/[0.06]">
+            {/* Pinned Action Buttons Footer */}
+            {currentPreset && (
+              <div className="flex-shrink-0 flex items-center justify-between gap-3 px-6 py-3.5 border-t border-black/[0.06] dark:border-white/[0.06] bg-black/[0.02] dark:bg-white/[0.02]">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {currentPreset.isBuiltIn
+                    ? "Built-in profiles are read-only"
+                    : isCreatingNew
+                    ? "New custom profile"
+                    : "Editing custom profile"}
+                </span>
+                <div className="flex items-center gap-2.5">
                   {!currentPreset.isBuiltIn && (
                     <GlassButton
                       variant="primary"
@@ -542,7 +555,7 @@ export const PresetManagerModal: React.FC<PresetManagerModalProps> = ({
                     </GlassButton>
                   )}
                 </div>
-              </>
+              </div>
             )}
           </div>
         </div>

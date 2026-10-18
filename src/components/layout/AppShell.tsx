@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { WindowControls } from "./WindowControls";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
+import { FooterBar } from "./FooterBar";
 import { Toast } from "../ui/Toast";
 import { ErrorBoundary } from "../ui/ErrorBoundary";
 
@@ -46,6 +47,9 @@ export const AppShell: React.FC = () => {
           </main>
         </div>
       </div>
+
+      {/* Bottom Status / Footer Bar */}
+      <FooterBar />
 
       {/* Notification Toast */}
       <Toast />

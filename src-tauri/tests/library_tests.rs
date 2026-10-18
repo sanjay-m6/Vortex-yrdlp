@@ -453,4 +453,3 @@ fn test_delete_failed_item_and_clean_removal() {
     let fetched = fetch_media_item_by_id(&conn, "failed-task-1").unwrap();
     assert!(fetched.is_none());
 }
-

@@ -18,6 +18,7 @@ import { GlassButton } from "../components/glass/GlassButton";
 import { useAppStore } from "../stores/appStore";
 import { api } from "../lib/api";
 import { AppUpdateInfo, SystemDiagnosticReport } from "../types";
+import { SponsorBanner } from "../components/ui/SponsorBanner";
 
 export const About: React.FC = () => {
   const { showToast } = useAppStore();
@@ -316,11 +317,14 @@ export const About: React.FC = () => {
           </div>
         </div>
 
+        {/* Sponsor & Support Banner */}
+        <SponsorBanner />
+
         {/* Action Links */}
         <div className="pt-2 border-t border-black/[0.06] dark:border-white/[0.06] flex items-center gap-3">
           <GlassButton
             size="sm"
-            onClick={() => showToast("GitHub repository link: https://github.com/sanjay-m6/Vortex-yrdlp", "info")}
+            onClick={() => showToast("GitHub repository link: https://github.com/sanjay-m6/Vortex-ytdlp", "info")}
           >
             <span>GitHub</span>
             <ExternalLink className="w-3 h-3 text-slate-400" />

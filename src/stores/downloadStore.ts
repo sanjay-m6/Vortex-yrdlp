@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { listen } from "@tauri-apps/api/event";
 import { DownloadProgress, DownloadRequest, DownloadTask, DownloadState } from "../types/download";
 import { downloadApi } from "../lib/downloadApi";
+import { useAppStore } from "./appStore";
 
 export interface DownloadStoreState {
   tasks: Record<string, DownloadTask>;
@@ -407,10 +408,22 @@ export const useDownloadStore = create<DownloadStoreState>((set, get) => ({
   },
 
   openFile: async (path: string) => {
-    await downloadApi.openDownloadedFile(path);
+    try {
+      await downloadApi.openDownloadedFile(path);
+      useAppStore.getState().showToast("Opening media file in default player...", "info");
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : String(err);
+      useAppStore.getState().showToast(`Could not open file: ${msg}`, "error");
+    }
   },
 
   openFolder: async (path: string) => {
-    await downloadApi.openDownloadFolder(path);
+    try {
+      await downloadApi.openDownloadFolder(path);
+      useAppStore.getState().showToast("Opened destination folder in File Explorer", "success");
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : String(err);
+      useAppStore.getState().showToast(`Could not open folder: ${msg}`, "error");
+    }
   },
 }));

@@ -106,7 +106,8 @@ pub fn run() {
                 queue_mgr.initialize_with_app(handle).await;
             });
 
-            // Set up System Tray
+            // Set up System Tray (desktop only)
+            #[cfg(desktop)]
             if let Some(icon) = app.default_window_icon() {
                 let _ = tauri::tray::TrayIconBuilder::new()
                     .icon(icon.clone())
@@ -131,6 +132,7 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            #[cfg(desktop)]
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let app = window.app_handle();
                 let state = app.state::<AppState>();

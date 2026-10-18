@@ -85,10 +85,10 @@ export const MediaDetailsModal: React.FC<MediaDetailsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <GlassCard className="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-black/10 dark:border-white/10">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+      <GlassCard className="w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl border border-black/10 dark:border-white/10">
         {/* Header */}
-        <div className="p-4 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between">
+        <div className="flex-shrink-0 p-4 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between">
           <div className="flex items-center gap-2.5 min-w-0">
             {item.mediaType === "audio" ? (
               <Music className="w-5 h-5 text-indigo-500 flex-shrink-0" />
@@ -108,7 +108,7 @@ export const MediaDetailsModal: React.FC<MediaDetailsModalProps> = ({
         </div>
 
         {/* Scrollable Content */}
-        <div className="p-5 overflow-y-auto space-y-5 text-xs">
+        <div className="flex-1 min-h-0 p-5 overflow-y-auto space-y-5 text-xs">
           {/* Main Hero Card with Thumbnail */}
           <div className="flex flex-col sm:flex-row gap-4 p-3.5 rounded-xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/[0.04] dark:border-white/[0.05]">
             <div className="w-full sm:w-44 aspect-video rounded-lg bg-slate-200 dark:bg-slate-800 overflow-hidden flex-shrink-0 relative flex items-center justify-center">
@@ -290,7 +290,7 @@ export const MediaDetailsModal: React.FC<MediaDetailsModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t border-black/[0.06] dark:border-white/[0.06] bg-black/[0.02] dark:bg-white/[0.02] flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex-shrink-0 p-4 border-t border-black/[0.06] dark:border-white/[0.06] bg-black/[0.02] dark:bg-white/[0.02] flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             {isCompleted && isAvailable && (
               <GlassButton

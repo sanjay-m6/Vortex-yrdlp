@@ -161,7 +161,8 @@ impl QueueManager {
                     );
                 } else {
                     item.status = DownloadState::Failed;
-                    let err_msg = "Download was interrupted: the application exited before completion.";
+                    let err_msg =
+                        "Download was interrupted: the application exited before completion.";
                     item.error_message = Some(err_msg.to_string());
                     item.completed_at = Some(now.clone());
                     let _ = update_download_status(
@@ -632,7 +633,10 @@ impl QueueManager {
         for item in items.iter_mut() {
             if item.status.is_active() && item.status != DownloadState::Queued {
                 item.status = DownloadState::Failed;
-                item.error_message = Some("Download was interrupted: the application exited before completion.".to_string());
+                item.error_message = Some(
+                    "Download was interrupted: the application exited before completion."
+                        .to_string(),
+                );
                 item.completed_at = Some(now.clone());
             }
         }
@@ -738,12 +742,16 @@ impl QueueManager {
         };
 
         if ToolResolver::resolve_tool(ToolType::YtDlp, custom_ytdlp.as_deref()).is_none() {
-            return Err(EngineError::not_found("yt-dlp executable could not be resolved for retry"));
+            return Err(EngineError::not_found(
+                "yt-dlp executable could not be resolved for retry",
+            ));
         }
-        if request.media_type == MediaType::Audio {
-            if ToolResolver::resolve_tool(ToolType::Ffmpeg, custom_ffmpeg.as_deref()).is_none() {
-                return Err(EngineError::not_found("FFmpeg executable could not be resolved for audio retry"));
-            }
+        if request.media_type == MediaType::Audio
+            && ToolResolver::resolve_tool(ToolType::Ffmpeg, custom_ffmpeg.as_deref()).is_none()
+        {
+            return Err(EngineError::not_found(
+                "FFmpeg executable could not be resolved for audio retry",
+            ));
         }
 
         let now = Utc::now().to_rfc3339();

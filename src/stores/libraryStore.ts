@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { listen } from "@tauri-apps/api/event";
 import { libraryApi } from "../lib/libraryApi";
+import { useAppStore } from "./appStore";
 import {
   MediaLibraryFilter,
   MediaLibraryItem,
@@ -173,11 +174,23 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   },
 
   openFile: async (id: string) => {
-    await libraryApi.openLibraryFile(id);
+    try {
+      await libraryApi.openLibraryFile(id);
+      useAppStore.getState().showToast("Opening media file in default player...", "info");
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : String(err);
+      useAppStore.getState().showToast(`Could not open file: ${msg}`, "error");
+    }
   },
 
   openFolder: async (id: string) => {
-    await libraryApi.openLibraryFolder(id);
+    try {
+      await libraryApi.openLibraryFolder(id);
+      useAppStore.getState().showToast("Opened containing folder in File Explorer", "success");
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : String(err);
+      useAppStore.getState().showToast(`Could not open folder: ${msg}`, "error");
+    }
   },
 
   copyItemPath: async (id: string): Promise<string> => {

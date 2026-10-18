@@ -222,33 +222,49 @@ pub fn open_containing_folder(path_str: &str) -> Result<(), EngineError> {
 
     #[cfg(target_os = "windows")]
     {
+        use std::os::windows::process::CommandExt;
         let clean_path = trimmed.replace('/', "\\");
         let path = PathBuf::from(&clean_path);
-        if path.is_file() && path.exists() {
-            let status = std::process::Command::new("explorer.exe")
-                .arg(format!("/select,{}", clean_path))
-                .spawn();
-            if status.is_ok() {
-                return Ok(());
+
+        if path.exists() {
+            if path.is_file() {
+                let status = std::process::Command::new("explorer.exe")
+                    .raw_arg(format!("/select,\"{}\"", clean_path))
+                    .spawn();
+                if status.is_ok() {
+                    return Ok(());
+                }
+            } else if path.is_dir() {
+                let status = std::process::Command::new("explorer.exe")
+                    .raw_arg(format!("\"{}\"", clean_path))
+                    .spawn();
+                if status.is_ok() {
+                    return Ok(());
+                }
+                return open::that_detached(&clean_path).map_err(|e| {
+                    EngineError::execution_failed(format!("Failed to open directory: {}", e))
+                });
             }
         }
 
-        // If path is a directory and exists, open directly
-        if path.is_dir() && path.exists() {
-            return open::that_detached(&clean_path).map_err(|e| {
-                EngineError::execution_failed(format!("Failed to open directory: {}", e))
-            });
-        }
-
-        // Fallback to opening parent directory
+        // Fallback to opening parent directory if the file itself is missing or was moved
         if let Some(parent) = path.parent() {
+            let parent_clean = parent.to_string_lossy().replace('/', "\\");
             if parent.exists() {
+                let status = std::process::Command::new("explorer.exe")
+                    .raw_arg(format!("\"{}\"", parent_clean))
+                    .spawn();
+                if status.is_ok() {
+                    return Ok(());
+                }
                 return open::that_detached(parent).map_err(|e| {
                     EngineError::execution_failed(format!("Failed to open directory: {}", e))
                 });
             }
         }
-        Err(EngineError::not_found("Containing folder does not exist"))
+        Err(EngineError::not_found(
+            "Containing folder does not exist on disk",
+        ))
     }
 
     #[cfg(target_os = "macos")]

@@ -40,14 +40,14 @@ export const RecentDownloads: React.FC = () => {
     }
   };
 
-  const handleOpenFile = (id: string, e: React.MouseEvent) => {
+  const handleOpenFile = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    openFile(id);
+    await openFile(id);
   };
 
-  const handleOpenFolder = (id: string, e: React.MouseEvent) => {
+  const handleOpenFolder = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    openFolder(id);
+    await openFolder(id);
   };
 
   const formatBytes = (bytes?: number | null) => {

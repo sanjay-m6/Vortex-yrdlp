@@ -1,0 +1,116 @@
+name: Build Android - APK & AAB
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_target:
+        description: 'Android Packaging Format'
+        required: true
+        type: choice
+        options:
+          - apk
+          - aab
+          - both
+        default: 'apk'
+  workflow_call:
+    inputs:
+      build_target:
+        description: 'Android Packaging Format'
+        required: false
+        type: string
+        default: 'apk'
+
+concurrency:
+  group: android-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    name: Build Android Application
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17 Development Kit
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 17
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Setup Rust Stable Toolchain & Android Targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Cache Cargo Dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      - name: Setup Android SDK & NDK Environment
+        run: |
+          echo "Configuring Android environment..."
+          if [ -z "$ANDROID_HOME" ]; then
+            export ANDROID_HOME="/usr/local/lib/android/sdk"
+          fi
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          
+          # Find or install latest stable NDK
+          NDK_DIR=$(find "$ANDROID_HOME/ndk" -maxdepth 1 -mindepth 1 | sort -V | tail -n 1)
+          if [ -z "$NDK_DIR" ]; then
+            echo "Installing Android NDK 26.1.10909125 via sdkmanager..."
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;26.1.10909125"
+            NDK_DIR="$ANDROID_HOME/ndk/26.1.10909125"
+          fi
+          echo "Using Android NDK: $NDK_DIR"
+          echo "NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
+
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      - name: Verify Android Project Setup & Permissions
+        run: |
+          if [ ! -d "src-tauri/gen/android" ]; then
+            echo "Android project not initialized. Initializing Tauri Android target..."
+            npx tauri android init --ci --skip-targets-install
+          fi
+          if [ -f "src-tauri/gen/android/gradlew" ]; then
+            chmod +x src-tauri/gen/android/gradlew
+          fi
+
+      - name: Build Android APK
+        if: inputs.build_target == 'apk' || inputs.build_target == 'both' || github.event_name != 'workflow_dispatch'
+        run: |
+          npm run tauri android build -- --ci --apk
+
+      - name: Build Android AAB (App Bundle)
+        if: inputs.build_target == 'aab' || inputs.build_target == 'both'
+        run: |
+          npm run tauri android build -- --ci --aab
+
+      - name: Organize Android Artifacts
+        run: |
+          mkdir -p dist-android
+          # Locate universal and per-ABI APKs
+          find src-tauri/gen/android/app/build/outputs/apk/ -name "*.apk" -exec cp {} dist-android/ \; 2>/dev/null || true
+          # Locate App Bundles
+          find src-tauri/gen/android/app/build/outputs/bundle/ -name "*.aab" -exec cp {} dist-android/ \; 2>/dev/null || true
+          ls -la dist-android/
+
+      - name: Upload Android Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vortex-android-package
+          path: dist-android/*
+          if-no-files-found: warn
+          retention-days: 14

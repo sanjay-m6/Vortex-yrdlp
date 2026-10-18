@@ -279,6 +279,7 @@ export const UrlInput: React.FC = () => {
         <form onSubmit={handleAnalyze} className="space-y-3">
           <div className="relative">
             <input
+              id="media-url-input"
               type="text"
               value={url}
               onChange={(e) => setUrl(e.target.value)}

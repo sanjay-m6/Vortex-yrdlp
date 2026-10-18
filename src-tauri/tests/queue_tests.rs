@@ -395,9 +395,17 @@ async fn test_shutdown_and_active_detection() {
 
     // Verify task transitioned to Failed with truthful shutdown error
     let snap = queue.get_snapshot().await;
-    let shut_item = snap.items.iter().find(|i| i.id == "task-shutdown-active").unwrap();
+    let shut_item = snap
+        .items
+        .iter()
+        .find(|i| i.id == "task-shutdown-active")
+        .unwrap();
     assert_eq!(shut_item.status, DownloadState::Failed);
-    assert!(shut_item.error_message.as_ref().unwrap().contains("interrupted"));
+    assert!(shut_item
+        .error_message
+        .as_ref()
+        .unwrap()
+        .contains("interrupted"));
 
     let _ = std::fs::remove_file(db_path);
 }
@@ -450,7 +458,9 @@ async fn test_retry_interrupted_mp3_and_best_quality_from_db() {
         started_at: Some("2026-10-15T10:00:00Z".to_string()),
         completed_at: Some("2026-10-15T10:00:10Z".to_string()),
         error_code: Some("APP_EXITED".to_string()),
-        error_message: Some("Download was interrupted: the application exited before completion.".to_string()),
+        error_message: Some(
+            "Download was interrupted: the application exited before completion.".to_string(),
+        ),
         output_path: None,
         downloaded_bytes: 2048,
         total_bytes: Some(10000),
@@ -469,7 +479,9 @@ async fn test_retry_interrupted_mp3_and_best_quality_from_db() {
         started_at: Some("2026-10-15T10:00:00Z".to_string()),
         completed_at: Some("2026-10-15T10:00:10Z".to_string()),
         error_code: Some("APP_EXITED".to_string()),
-        error_message: Some("Download was interrupted: the application exited before completion.".to_string()),
+        error_message: Some(
+            "Download was interrupted: the application exited before completion.".to_string(),
+        ),
         output_path: None,
         downloaded_bytes: 512000,
         total_bytes: Some(1500000),
@@ -489,15 +501,18 @@ async fn test_retry_interrupted_mp3_and_best_quality_from_db() {
     // Verify database lookup function works for unqueued items
     {
         let conn = rusqlite::Connection::open(&db_path).unwrap();
-        let loaded_mp3 = vortex_lib::database::fetch_download_by_id(&conn, "retry-mp3").unwrap().unwrap();
+        let loaded_mp3 = vortex_lib::database::fetch_download_by_id(&conn, "retry-mp3")
+            .unwrap()
+            .unwrap();
         assert_eq!(loaded_mp3.id, "retry-mp3");
         assert_eq!(loaded_mp3.request.media_type, MediaType::Audio);
 
-        let loaded_best = vortex_lib::database::fetch_download_by_id(&conn, "retry-best").unwrap().unwrap();
+        let loaded_best = vortex_lib::database::fetch_download_by_id(&conn, "retry-best")
+            .unwrap()
+            .unwrap();
         assert_eq!(loaded_best.id, "retry-best");
         assert_eq!(loaded_best.request.media_type, MediaType::Video);
     }
 
     let _ = std::fs::remove_file(db_path);
 }
-

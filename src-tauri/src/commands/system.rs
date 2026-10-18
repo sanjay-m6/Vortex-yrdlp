@@ -57,12 +57,25 @@ pub async fn reveal_in_explorer(path: String) -> Result<(), String> {
     }
 
     if p.is_dir() {
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            let clean = p.display().to_string().replace('/', "\\");
+            let status = std::process::Command::new("explorer.exe")
+                .raw_arg(format!("\"{}\"", clean))
+                .spawn();
+            if status.is_ok() {
+                return Ok(());
+            }
+        }
         open::that(p).map_err(|e| format!("Failed to open directory: {}", e))?;
     } else {
         #[cfg(target_os = "windows")]
         {
+            use std::os::windows::process::CommandExt;
+            let clean = p.display().to_string().replace('/', "\\");
             let _ = std::process::Command::new("explorer.exe")
-                .arg(format!("/select,{}", p.display()))
+                .raw_arg(format!("/select,\"{}\"", clean))
                 .spawn();
         }
         #[cfg(not(target_os = "windows"))]
@@ -170,10 +183,7 @@ pub async fn app_get_active_downloads_count(state: State<'_, AppState>) -> Resul
 }
 
 #[command]
-pub async fn app_exit(
-    app: tauri::AppHandle,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn app_exit(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     state.queue_manager.shutdown().await;
     app.exit(0);
     Ok(())
@@ -183,4 +193,3 @@ pub async fn app_exit(
 pub async fn app_is_maximized(window: tauri::Window) -> Result<bool, String> {
     window.is_maximized().map_err(|e| e.to_string())
 }
-

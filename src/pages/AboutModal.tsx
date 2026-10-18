@@ -1,5 +1,6 @@
 import React from "react";
 import { Sparkles, ShieldCheck, Code2 } from "lucide-react";
+import { SponsorBanner } from "../components/ui/SponsorBanner";
 
 export const AboutModal: React.FC = () => {
   const techStack = [
@@ -71,6 +72,8 @@ export const AboutModal: React.FC = () => {
             Vortex is designed strictly for downloading authorized online media, personal archival, and creative commons works. Users must comply with relevant copyright laws, terms of service, and access policies of the host platforms.
           </p>
         </div>
+
+        <SponsorBanner />
       </div>
     </div>
   );
