@@ -483,7 +483,7 @@ pub async fn download_all_essential_tools(
     let ffmpeg_ok = status.ffmpeg.available;
     let success = ytdlp_ok && ffmpeg_ok;
 
-    let message = if success {
+    let message: String = if success {
         format!(
             "Essential engines installed successfully! yt-dlp v{} and FFmpeg v{} are ready.",
             status.ytdlp.version.as_deref().unwrap_or("unknown"),

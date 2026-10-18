@@ -196,11 +196,12 @@ pub fn build_ytdlp_args(
             .unwrap_or_else(|| "%(title).150B [%(id)s].%(ext)s".to_string()),
         (None, Some(tpl)) => {
             let sanitized = sanitize_filename(tpl);
-            if sanitized.contains("%(") {
+            let tpl_str: String = if sanitized.contains("%(") {
                 sanitized
             } else {
                 format!("{}.%(ext)s", sanitized)
-            }
+            };
+            tpl_str
         }
         (None, None) => "%(title).150B [%(id)s].%(ext)s".to_string(),
     };
