@@ -97,11 +97,16 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm ci
 
+      - name: Sanitize Tauri Signing Key
+        run: node -e "const k = (process.env.RAW_KEY || '').replace(/[\r\n\s]/g, ''); if (k) { console.log('::add-mask::' + k); require('fs').appendFileSync(process.env.GITHUB_ENV, 'TAURI_SIGNING_PRIVATE_KEY=' + k + '\n'); }"
+        env:
+          RAW_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+
       - name: Build Tauri Desktop Package
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ env.TAURI_SIGNING_PRIVATE_KEY || secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           args: ${{ matrix.args }}
