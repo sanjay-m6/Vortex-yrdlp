@@ -91,10 +91,7 @@ pub fn resolve_ytdlp_path(custom_path: Option<&str>) -> Option<PathBuf> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        if let Ok(output) = std::process::Command::new("which")
-            .arg("yt-dlp")
-            .output()
-        {
+        if let Ok(output) = std::process::Command::new("which").arg("yt-dlp").output() {
             if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 if let Some(first_line) = stdout.lines().next() {
@@ -153,10 +150,7 @@ pub fn resolve_ffmpeg_path(custom_path: Option<&str>) -> Option<PathBuf> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        if let Ok(output) = std::process::Command::new("which")
-            .arg("ffmpeg")
-            .output()
-        {
+        if let Ok(output) = std::process::Command::new("which").arg("ffmpeg").output() {
             if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 if let Some(first_line) = stdout.lines().next() {

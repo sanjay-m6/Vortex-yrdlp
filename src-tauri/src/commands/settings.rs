@@ -72,10 +72,7 @@ pub async fn get_setup_status(state: State<'_, AppState>) -> Result<SetupStatus,
 }
 
 #[command]
-pub async fn save_setup_progress(
-    step: u32,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn save_setup_progress(step: u32, state: State<'_, AppState>) -> Result<(), String> {
     let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
     let mut settings = load_app_settings(&conn);
     settings.setup_step = Some(step);
@@ -85,22 +82,21 @@ pub async fn save_setup_progress(
 }
 
 #[command]
-pub async fn complete_setup_wizard(
-    state: State<'_, AppState>,
-) -> Result<bool, String> {
+pub async fn complete_setup_wizard(state: State<'_, AppState>) -> Result<bool, String> {
     let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
     let mut settings = load_app_settings(&conn);
     settings.setup_completed = true;
     settings.setup_step = Some(4);
     store_app_settings(&conn, &settings).map_err(|e| e.to_string())?;
-    crate::logging::log_info("Setup", "Setup Wizard marked as completed in SQLite settings");
+    crate::logging::log_info(
+        "Setup",
+        "Setup Wizard marked as completed in SQLite settings",
+    );
     Ok(true)
 }
 
 #[command]
-pub async fn reset_setup_wizard(
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn reset_setup_wizard(state: State<'_, AppState>) -> Result<(), String> {
     let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
     let mut settings = load_app_settings(&conn);
     settings.setup_completed = false;

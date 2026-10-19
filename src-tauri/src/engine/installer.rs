@@ -55,11 +55,15 @@ impl ToolInstallManager {
     }
 
     pub fn try_acquire_ytdlp_lock(&self) -> Result<tokio::sync::MutexGuard<'_, ()>, String> {
-        self.ytdlp_lock.try_lock().map_err(|_| "yt-dlp lock unavailable".to_string())
+        self.ytdlp_lock
+            .try_lock()
+            .map_err(|_| "yt-dlp lock unavailable".to_string())
     }
 
     pub fn try_acquire_ffmpeg_lock(&self) -> Result<tokio::sync::MutexGuard<'_, ()>, String> {
-        self.ffmpeg_lock.try_lock().map_err(|_| "FFmpeg lock unavailable".to_string())
+        self.ffmpeg_lock
+            .try_lock()
+            .map_err(|_| "FFmpeg lock unavailable".to_string())
     }
 
     fn next_op_id(&self) -> u64 {
@@ -87,11 +91,12 @@ impl ToolInstallManager {
             .spawn()
             .map_err(|e| format!("Failed to spawn executable {:?}: {}", executable, e))?;
 
-        let output = match tokio::time::timeout(Duration::from_secs(6), child.wait_with_output()).await {
-            Ok(Ok(out)) => out,
-            Ok(Err(e)) => return Err(format!("Process execution error: {}", e)),
-            Err(_) => return Err("Execution timed out after 6 seconds".to_string()),
-        };
+        let output =
+            match tokio::time::timeout(Duration::from_secs(6), child.wait_with_output()).await {
+                Ok(Ok(out)) => out,
+                Ok(Err(e)) => return Err(format!("Process execution error: {}", e)),
+                Err(_) => return Err("Execution timed out after 6 seconds".to_string()),
+            };
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -120,13 +125,19 @@ impl ToolInstallManager {
         let _guard = match self.ytdlp_lock.try_lock() {
             Ok(g) => g,
             Err(_) => {
-                log_warn("Installer", "Concurrent yt-dlp installation request rejected");
+                log_warn(
+                    "Installer",
+                    "Concurrent yt-dlp installation request rejected",
+                );
                 return Err("An installation of yt-dlp is already in progress. Please wait for it to complete.".to_string());
             }
         };
 
         let op_id = self.next_op_id();
-        log_info("Installer", &format!("[op:{}] Starting yt-dlp installation check", op_id));
+        log_info(
+            "Installer",
+            &format!("[op:{}] Starting yt-dlp installation check", op_id),
+        );
 
         // Step 1: Check if yt-dlp is already installed and functional
         let existing = engine.check_tool(ToolType::YtDlp, None).await;
@@ -135,7 +146,10 @@ impl ToolInstallManager {
             let path = existing.executable_path.unwrap_or_default();
             log_info(
                 "Installer",
-                &format!("[op:{}] Existing valid yt-dlp v{} found at {:?}", op_id, version, path),
+                &format!(
+                    "[op:{}] Existing valid yt-dlp v{} found at {:?}",
+                    op_id, version, path
+                ),
             );
 
             if let Some(app_handle) = app {
@@ -304,7 +318,10 @@ impl ToolInstallManager {
             Ok(v) => {
                 log_info(
                     "Installer",
-                    &format!("[op:{}] yt-dlp binary verified (v{}), committing file", op_id, v),
+                    &format!(
+                        "[op:{}] yt-dlp binary verified (v{}), committing file",
+                        op_id, v
+                    ),
                 );
             }
             Err(e) => {
@@ -358,13 +375,19 @@ impl ToolInstallManager {
         let _guard = match self.ffmpeg_lock.try_lock() {
             Ok(g) => g,
             Err(_) => {
-                log_warn("Installer", "Concurrent FFmpeg installation request rejected");
+                log_warn(
+                    "Installer",
+                    "Concurrent FFmpeg installation request rejected",
+                );
                 return Err("An installation of FFmpeg is already in progress. Please wait for it to complete.".to_string());
             }
         };
 
         let op_id = self.next_op_id();
-        log_info("Installer", &format!("[op:{}] Starting FFmpeg installation check", op_id));
+        log_info(
+            "Installer",
+            &format!("[op:{}] Starting FFmpeg installation check", op_id),
+        );
 
         // Step 1: Check if FFmpeg is already installed and functional
         let ffmpeg_status = engine.check_tool(ToolType::Ffmpeg, None).await;
@@ -375,7 +398,10 @@ impl ToolInstallManager {
             let path = ffmpeg_status.executable_path.unwrap_or_default();
             log_info(
                 "Installer",
-                &format!("[op:{}] Existing valid FFmpeg & FFprobe found at {:?}", op_id, path),
+                &format!(
+                    "[op:{}] Existing valid FFmpeg & FFprobe found at {:?}",
+                    op_id, path
+                ),
             );
 
             if let Some(app_handle) = app {
@@ -387,7 +413,10 @@ impl ToolInstallManager {
                         percentage: 100.0,
                         downloaded_bytes: 0,
                         total_bytes: None,
-                        message: format!("FFmpeg & FFprobe are already installed and verified ({})", v),
+                        message: format!(
+                            "FFmpeg & FFprobe are already installed and verified ({})",
+                            v
+                        ),
                     },
                 );
             }
@@ -431,7 +460,10 @@ impl ToolInstallManager {
             let mut last_error = String::new();
 
             for url in download_urls {
-                log_info("Installer", &format!("[op:{}] Attempting FFmpeg download from {}", op_id, url));
+                log_info(
+                    "Installer",
+                    &format!("[op:{}] Attempting FFmpeg download from {}", op_id, url),
+                );
                 match client.get(url).send().await {
                     Ok(res) if res.status().is_success() => {
                         let total_size = res.content_length();
@@ -620,7 +652,8 @@ impl ToolInstallManager {
                         percentage: 100.0,
                         downloaded_bytes: zip_bytes.len() as u64,
                         total_bytes: Some(zip_bytes.len() as u64),
-                        message: "FFmpeg and FFprobe extracted and verified successfully".to_string(),
+                        message: "FFmpeg and FFprobe extracted and verified successfully"
+                            .to_string(),
                     },
                 );
             }
@@ -649,7 +682,10 @@ impl ToolInstallManager {
         let op_id = self.next_op_id();
         log_info(
             "Installer",
-            &format!("[op:{}] Starting unified installation for all essential tools", op_id),
+            &format!(
+                "[op:{}] Starting unified installation for all essential tools",
+                op_id
+            ),
         );
 
         let ytdlp_res = self.download_ytdlp(app, engine).await;
@@ -659,6 +695,9 @@ impl ToolInstallManager {
         let ytdlp_ok = status.ytdlp.available;
         let ffmpeg_ok = status.ffmpeg.available;
         let success = ytdlp_ok && ffmpeg_ok;
+
+        let ytdlp_err = ytdlp_res.err();
+        let ffmpeg_err = ffmpeg_res.err();
 
         let message = if success {
             format!(
@@ -670,19 +709,22 @@ impl ToolInstallManager {
             format!(
                 "yt-dlp is ready (v{}). FFmpeg notice: {}",
                 status.ytdlp.version.as_deref().unwrap_or("ok"),
-                ffmpeg_res.err().unwrap_or_else(|| "Not found".to_string())
+                ffmpeg_err.as_deref().unwrap_or("Not found")
             )
         } else {
             format!(
                 "Installation issue: yt-dlp: {} | FFmpeg: {}",
-                ytdlp_res.err().unwrap_or_else(|| "ok".to_string()),
-                ffmpeg_res.err().unwrap_or_else(|| "ok".to_string())
+                ytdlp_err.as_deref().unwrap_or("ok"),
+                ffmpeg_err.as_deref().unwrap_or("ok")
             )
         };
 
         log_info(
             "Installer",
-            &format!("[op:{}] Unified install finished. Success: {}, Message: {}", op_id, success, message),
+            &format!(
+                "[op:{}] Unified install finished. Success: {}, Message: {}",
+                op_id, success, message
+            ),
         );
 
         Ok(EssentialToolsInstallResult {

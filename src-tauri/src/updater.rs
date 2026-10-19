@@ -176,7 +176,13 @@ impl UpdateManager {
     ) -> Result<AppUpdateInfo, String> {
         self.set_state(UpdateState::Checking);
         let current_version = env!("CARGO_PKG_VERSION").to_string();
-        log_info("Updater", &format!("Checking for updates (current version: v{})", current_version));
+        log_info(
+            "Updater",
+            &format!(
+                "Checking for updates (current version: v{})",
+                current_version
+            ),
+        );
 
         // 1. Try official Tauri 2 Updater endpoint first (with signature verification)
         let mut tauri_update_found: Option<Update> = None;
@@ -186,13 +192,19 @@ impl UpdateManager {
         if let Ok(updater) = app.updater() {
             match updater.check().await {
                 Ok(Some(up)) => {
-                    log_info("Updater", &format!("Tauri updater found version {}", up.version));
+                    log_info(
+                        "Updater",
+                        &format!("Tauri updater found version {}", up.version),
+                    );
                     tauri_release_notes = up.body.clone();
                     tauri_date = up.date.map(|d| d.to_string());
                     tauri_update_found = Some(up);
                 }
                 Ok(None) => {
-                    log_info("Updater", "Tauri updater: already running latest verified version");
+                    log_info(
+                        "Updater",
+                        "Tauri updater: already running latest verified version",
+                    );
                 }
                 Err(e) => {
                     log_warn("Updater", &format!("Tauri updater check returned: {}", e));
@@ -230,33 +242,57 @@ impl UpdateManager {
         }
 
         // Determine effective latest version and metadata
-        let (latest_version, has_update, release_name, release_notes, published_at, download_url, sig_verified) =
-            if let Some(up) = tauri_update_found {
-                let v = up.version.clone();
-                let has = is_newer_version(&current_version, &v);
-                let notes = tauri_release_notes.or_else(|| github_latest.as_ref().and_then(|g| g.body.clone()));
-                let name = github_latest.as_ref().and_then(|g| g.name.clone()).or_else(|| Some(format!("Vortex v{}", v)));
-                let date = tauri_date.or_else(|| github_latest.as_ref().and_then(|g| g.published_at.clone()));
-                let url = github_latest.as_ref().map(|g| g.html_url.clone());
-                
-                // Store pending update for one-click installation
-                *self.pending_update.lock().await = Some(up);
-                (v, has, name, notes, date, url, true)
-            } else if let Some(gh) = github_latest {
-                let v = gh.tag_name.trim_start_matches('v').trim_start_matches('V').to_string();
-                let has = is_newer_version(&current_version, &v);
-                (v, has, gh.name, gh.body, gh.published_at, Some(gh.html_url), false)
-            } else {
-                (
-                    current_version.clone(),
-                    false,
-                    Some(format!("Vortex v{}", current_version)),
-                    Some("Current production build.".to_string()),
-                    Some(Utc::now().to_rfc3339()),
-                    None,
-                    true,
-                )
-            };
+        let (
+            latest_version,
+            has_update,
+            release_name,
+            release_notes,
+            published_at,
+            download_url,
+            sig_verified,
+        ) = if let Some(up) = tauri_update_found {
+            let v = up.version.clone();
+            let has = is_newer_version(&current_version, &v);
+            let notes =
+                tauri_release_notes.or_else(|| github_latest.as_ref().and_then(|g| g.body.clone()));
+            let name = github_latest
+                .as_ref()
+                .and_then(|g| g.name.clone())
+                .or_else(|| Some(format!("Vortex v{}", v)));
+            let date =
+                tauri_date.or_else(|| github_latest.as_ref().and_then(|g| g.published_at.clone()));
+            let url = github_latest.as_ref().map(|g| g.html_url.clone());
+
+            // Store pending update for one-click installation
+            *self.pending_update.lock().await = Some(up);
+            (v, has, name, notes, date, url, true)
+        } else if let Some(gh) = github_latest {
+            let v = gh
+                .tag_name
+                .trim_start_matches('v')
+                .trim_start_matches('V')
+                .to_string();
+            let has = is_newer_version(&current_version, &v);
+            (
+                v,
+                has,
+                gh.name,
+                gh.body,
+                gh.published_at,
+                Some(gh.html_url),
+                false,
+            )
+        } else {
+            (
+                current_version.clone(),
+                false,
+                Some(format!("Vortex v{}", current_version)),
+                Some("Current production build.".to_string()),
+                Some(Utc::now().to_rfc3339()),
+                None,
+                true,
+            )
+        };
 
         let new_state = if has_update {
             UpdateState::UpdateAvailable
@@ -325,8 +361,13 @@ impl UpdateManager {
             Some(u) => u,
             None => {
                 // If not cached, re-check to acquire the Update handle
-                log_info("Updater", "Pending update handle not found; checking for update first");
-                let info = self.check_for_update(app, app_state, UpdateCheckOptions::default()).await?;
+                log_info(
+                    "Updater",
+                    "Pending update handle not found; checking for update first",
+                );
+                let info = self
+                    .check_for_update(app, app_state, UpdateCheckOptions::default())
+                    .await?;
                 if !info.has_update {
                     return Err("No update available to install.".to_string());
                 }
@@ -350,47 +391,53 @@ impl UpdateManager {
         let app_handle_progress = app.clone();
         let mut downloaded: u64 = 0;
 
-        let res = update.download_and_install(
-            move |chunk_len, total_bytes| {
-                downloaded += chunk_len as u64;
-                let pct = if let Some(tot) = total_bytes {
-                    if tot > 0 {
-                        ((downloaded as f64 / tot as f64) * 100.0).min(99.0)
+        let res = update
+            .download_and_install(
+                move |chunk_len, total_bytes| {
+                    downloaded += chunk_len as u64;
+                    let pct = if let Some(tot) = total_bytes {
+                        if tot > 0 {
+                            ((downloaded as f64 / tot as f64) * 100.0).min(99.0)
+                        } else {
+                            0.0
+                        }
                     } else {
                         0.0
-                    }
-                } else {
-                    0.0
-                };
+                    };
 
-                let _ = app_handle_progress.emit(
-                    "update_download_progress",
-                    UpdateProgressPayload {
-                        stage: "downloading".to_string(),
-                        percentage: pct,
-                        downloaded_bytes: downloaded,
-                        total_bytes,
-                        message: format!("Downloading update: {:.1}%", pct),
-                    },
-                );
-            },
-            move || {
-                let _ = app.emit(
-                    "update_download_progress",
-                    UpdateProgressPayload {
-                        stage: "verifying".to_string(),
-                        percentage: 100.0,
-                        downloaded_bytes: downloaded,
-                        total_bytes: None,
-                        message: "Verifying cryptographic signature and applying update...".to_string(),
-                    },
-                );
-            },
-        ).await;
+                    let _ = app_handle_progress.emit(
+                        "update_download_progress",
+                        UpdateProgressPayload {
+                            stage: "downloading".to_string(),
+                            percentage: pct,
+                            downloaded_bytes: downloaded,
+                            total_bytes,
+                            message: format!("Downloading update: {:.1}%", pct),
+                        },
+                    );
+                },
+                move || {
+                    let _ = app.emit(
+                        "update_download_progress",
+                        UpdateProgressPayload {
+                            stage: "verifying".to_string(),
+                            percentage: 100.0,
+                            downloaded_bytes: downloaded,
+                            total_bytes: None,
+                            message: "Verifying cryptographic signature and applying update..."
+                                .to_string(),
+                        },
+                    );
+                },
+            )
+            .await;
 
         match res {
             Ok(_) => {
-                log_info("Updater", "Update successfully downloaded, verified, and staged");
+                log_info(
+                    "Updater",
+                    "Update successfully downloaded, verified, and staged",
+                );
                 self.set_state(UpdateState::RestartRequired);
                 let _ = app.emit(
                     "update_download_progress",
@@ -399,7 +446,8 @@ impl UpdateManager {
                         percentage: 100.0,
                         downloaded_bytes: downloaded,
                         total_bytes: None,
-                        message: "Update ready. Restart Vortex to apply the new version.".to_string(),
+                        message: "Update ready. Restart Vortex to apply the new version."
+                            .to_string(),
                     },
                 );
 
@@ -410,7 +458,7 @@ impl UpdateManager {
                 Ok(())
             }
             Err(e) => {
-                let err_msg = format!("Failed to download or verify update: {}", e);
+                let err_msg: String = format!("Failed to download or verify update: {}", e);
                 log_error("Updater", &err_msg);
                 self.set_state(UpdateState::Failed);
                 let _ = app.emit(
@@ -428,7 +476,12 @@ impl UpdateManager {
         }
     }
 
-    pub fn trigger_restart(&self, app: &AppHandle, app_state: &AppState, force: bool) -> Result<(), String> {
+    pub fn trigger_restart(
+        &self,
+        app: &AppHandle,
+        app_state: &AppState,
+        force: bool,
+    ) -> Result<(), String> {
         if !force && app_state.queue_manager.has_active_downloads_sync() {
             return Err("Active downloads are running. Please pause or wait for them to finish, or confirm to force restart.".to_string());
         }
@@ -448,7 +501,10 @@ pub async fn check_app_update(
     state: State<'_, AppState>,
 ) -> Result<AppUpdateInfo, String> {
     let opts = options.unwrap_or_default();
-    state.update_manager.check_for_update(&app, &state, opts).await
+    state
+        .update_manager
+        .check_for_update(&app, &state, opts)
+        .await
 }
 
 #[command]
@@ -486,7 +542,9 @@ pub async fn get_update_state(state: State<'_, AppState>) -> Result<UpdateState,
 }
 
 #[command]
-pub async fn get_update_preferences(state: State<'_, AppState>) -> Result<UpdatePreferences, String> {
+pub async fn get_update_preferences(
+    state: State<'_, AppState>,
+) -> Result<UpdatePreferences, String> {
     let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
     let settings = load_app_settings(&conn);
     Ok(UpdatePreferences {

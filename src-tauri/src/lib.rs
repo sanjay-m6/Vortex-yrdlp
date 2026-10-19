@@ -101,7 +101,10 @@ pub fn run() {
     #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
     let builder =
         tauri::Builder::default().plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            logging::log_info("Window", "Second instance launch detected; focusing existing primary window");
+            logging::log_info(
+                "Window",
+                "Second instance launch detected; focusing existing primary window",
+            );
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.unminimize();
@@ -137,7 +140,10 @@ pub fn run() {
                     if let Ok(conn) = state_clone.db.conn.lock() {
                         let settings = crate::database::load_app_settings(&conn);
                         if settings.auto_check_updates {
-                            crate::updater::is_check_due(&settings.check_frequency, settings.last_update_check.as_deref())
+                            crate::updater::is_check_due(
+                                &settings.check_frequency,
+                                settings.last_update_check.as_deref(),
+                            )
                         } else {
                             false
                         }
@@ -149,22 +155,35 @@ pub fn run() {
                 if should_check {
                     logging::log_info("Updater", "Running automatic background update check...");
                     let opts = crate::updater::UpdateCheckOptions::default();
-                    match update_mgr.check_for_update(&app_handle_for_update, &state_clone, opts).await {
+                    match update_mgr
+                        .check_for_update(&app_handle_for_update, &state_clone, opts)
+                        .await
+                    {
                         Ok(info) => {
                             if info.has_update {
-                                logging::log_info("Updater", &format!("New update available: v{}", info.latest_version));
-                                let _ = app_handle_for_update.emit("update_available_notification", info);
+                                logging::log_info(
+                                    "Updater",
+                                    &format!("New update available: v{}", info.latest_version),
+                                );
+                                let _ = app_handle_for_update
+                                    .emit("update_available_notification", info);
                             }
                         }
                         Err(e) => {
-                            logging::log_warn("Updater", &format!("Background update check error: {}", e));
+                            logging::log_warn(
+                                "Updater",
+                                &format!("Background update check error: {}", e),
+                            );
                         }
                     }
                 }
             });
 
             if let Some(_window) = app.get_webview_window("main") {
-                logging::log_info("Window", "Primary application window 'main' verified and ready");
+                logging::log_info(
+                    "Window",
+                    "Primary application window 'main' verified and ready",
+                );
             }
 
             // Set up System Tray (desktop only)

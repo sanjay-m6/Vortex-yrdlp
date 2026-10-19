@@ -423,30 +423,48 @@ fn test_tool_install_manager_mutex_concurrency() {
 
     // yt-dlp lock acquisition
     let ytdlp_guard = manager.try_acquire_ytdlp_lock();
-    assert!(ytdlp_guard.is_ok(), "First acquire of yt-dlp lock should succeed");
+    assert!(
+        ytdlp_guard.is_ok(),
+        "First acquire of yt-dlp lock should succeed"
+    );
 
     // Second concurrent acquire must fail without running child process
     let concurrent_ytdlp = manager.try_acquire_ytdlp_lock();
-    assert!(concurrent_ytdlp.is_err(), "Second concurrent acquire of yt-dlp lock must fail");
+    assert!(
+        concurrent_ytdlp.is_err(),
+        "Second concurrent acquire of yt-dlp lock must fail"
+    );
 
     // Release lock
     drop(ytdlp_guard);
 
     // Re-acquire must succeed now
     let retry_ytdlp = manager.try_acquire_ytdlp_lock();
-    assert!(retry_ytdlp.is_ok(), "Re-acquire of yt-dlp lock after release must succeed");
+    assert!(
+        retry_ytdlp.is_ok(),
+        "Re-acquire of yt-dlp lock after release must succeed"
+    );
 
     // FFmpeg lock acquisition
     let ffmpeg_guard = manager.try_acquire_ffmpeg_lock();
-    assert!(ffmpeg_guard.is_ok(), "First acquire of FFmpeg lock should succeed");
+    assert!(
+        ffmpeg_guard.is_ok(),
+        "First acquire of FFmpeg lock should succeed"
+    );
 
     let concurrent_ffmpeg = manager.try_acquire_ffmpeg_lock();
-    assert!(concurrent_ffmpeg.is_err(), "Second concurrent acquire of FFmpeg lock must fail");
+    assert!(
+        concurrent_ffmpeg.is_err(),
+        "Second concurrent acquire of FFmpeg lock must fail"
+    );
 
     drop(ffmpeg_guard);
 
     let retry_ffmpeg = manager.try_acquire_ffmpeg_lock();
-    assert!(retry_ffmpeg.is_ok(), "Re-acquire of FFmpeg lock after release must succeed");
+    assert!(
+        retry_ffmpeg.is_ok(),
+        "Re-acquire of FFmpeg lock after release must succeed"
+    );
 }
 
 // 14. Path environment resolution without shell or popup
@@ -455,4 +473,3 @@ fn test_path_environment_resolver_silent_nonexistent() {
     let non_existent = ToolResolver::find_in_path("vortex_non_existent_binary_xyz_12345");
     assert!(non_existent.is_none());
 }
-

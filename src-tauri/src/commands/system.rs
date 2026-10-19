@@ -107,7 +107,10 @@ pub async fn download_latest_ytdlp(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    state.installer.download_ytdlp(Some(&app), &state.engine).await
+    state
+        .installer
+        .download_ytdlp(Some(&app), &state.engine)
+        .await
 }
 
 #[command]
@@ -115,7 +118,10 @@ pub async fn download_latest_ffmpeg(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    state.installer.download_ffmpeg(Some(&app), &state.engine).await
+    state
+        .installer
+        .download_ffmpeg(Some(&app), &state.engine)
+        .await
 }
 
 #[command]
