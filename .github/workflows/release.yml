@@ -319,6 +319,11 @@ jobs:
   publish-github-release:
     name: Collate Artifacts, Checksums & Publish Release
     needs: [verify-version, build-desktop, build-android]
+    if: |
+      !cancelled() &&
+      needs.verify-version.result == 'success' &&
+      needs.build-desktop.result == 'success' &&
+      (needs.build-android.result == 'success' || needs.build-android.result == 'skipped' || needs.build-android.result == 'failure')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source Code
