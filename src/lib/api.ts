@@ -11,6 +11,11 @@ import {
   AppUpdateInfo,
   ToolDownloadProgressPayload,
   EssentialToolsInstallResult,
+  SetupStatus,
+  UpdateState,
+  UpdateProgressPayload,
+  UpdateCheckOptions,
+  UpdatePreferences,
 } from "../types";
 
 export const api = {
@@ -86,6 +91,22 @@ export const api = {
     return invoke("update_app_settings", { settings });
   },
 
+  getSetupStatus: async (): Promise<SetupStatus> => {
+    return invoke("get_setup_status");
+  },
+
+  saveSetupProgress: async (step: number): Promise<void> => {
+    return invoke("save_setup_progress", { step });
+  },
+
+  completeSetupWizard: async (): Promise<boolean> => {
+    return invoke("complete_setup_wizard");
+  },
+
+  resetSetupWizard: async (): Promise<void> => {
+    return invoke("reset_setup_wizard");
+  },
+
   onDownloadProgress: async (
     callback: (payload: DownloadProgressPayload) => void
   ): Promise<UnlistenFn> => {
@@ -107,7 +128,43 @@ export const api = {
     return invoke("read_recent_logs", { lines });
   },
 
-  checkAppUpdate: async (): Promise<AppUpdateInfo> => {
-    return invoke("check_app_update");
+  checkAppUpdate: async (options?: UpdateCheckOptions): Promise<AppUpdateInfo> => {
+    return invoke("check_app_update", { options });
+  },
+
+  downloadUpdate: async (restartImmediately?: boolean, force?: boolean): Promise<void> => {
+    return invoke("download_update", { restartImmediately, force });
+  },
+
+  installAndRestart: async (force?: boolean): Promise<void> => {
+    return invoke("install_and_restart", { force });
+  },
+
+  getUpdateState: async (): Promise<UpdateState> => {
+    return invoke("get_update_state");
+  },
+
+  getUpdatePreferences: async (): Promise<UpdatePreferences> => {
+    return invoke("get_update_preferences");
+  },
+
+  saveUpdatePreferences: async (prefs: UpdatePreferences): Promise<void> => {
+    return invoke("save_update_preferences", { prefs });
+  },
+
+  onUpdateDownloadProgress: async (
+    callback: (payload: UpdateProgressPayload) => void
+  ): Promise<UnlistenFn> => {
+    return listen<UpdateProgressPayload>("update_download_progress", (event) => {
+      callback(event.payload);
+    });
+  },
+
+  onUpdateAvailableNotification: async (
+    callback: (payload: AppUpdateInfo) => void
+  ): Promise<UnlistenFn> => {
+    return listen<AppUpdateInfo>("update_available_notification", (event) => {
+      callback(event.payload);
+    });
   },
 };

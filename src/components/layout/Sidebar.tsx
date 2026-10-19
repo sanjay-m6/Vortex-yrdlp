@@ -159,7 +159,7 @@ export const Sidebar: React.FC = () => {
                       Vortex
                     </h2>
                     <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-                      v1.1.0
+                      v1.2.0
                     </span>
                   </div>
                   <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Desktop Utility</span>

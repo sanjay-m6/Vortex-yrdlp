@@ -28,10 +28,12 @@ pub struct AppState {
     pub cancel_handles: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
     pub db: Arc<DbState>,
     pub engine: Arc<EngineManager>,
+    pub installer: Arc<crate::engine::installer::ToolInstallManager>,
     pub process_manager: Arc<ProcessManager>,
     pub download_manager: Arc<manager::DownloadManager>,
     pub queue_manager: Arc<queue::QueueManager>,
     pub playlist_manager: Arc<crate::playlist::PlaylistAnalysisManager>,
+    pub update_manager: Arc<crate::updater::UpdateManager>,
 }
 
 impl Clone for AppState {
@@ -40,10 +42,12 @@ impl Clone for AppState {
             cancel_handles: Arc::clone(&self.cancel_handles),
             db: Arc::clone(&self.db),
             engine: Arc::clone(&self.engine),
+            installer: Arc::clone(&self.installer),
             process_manager: Arc::clone(&self.process_manager),
             download_manager: Arc::clone(&self.download_manager),
             queue_manager: Arc::clone(&self.queue_manager),
             playlist_manager: Arc::clone(&self.playlist_manager),
+            update_manager: Arc::clone(&self.update_manager),
         }
     }
 }

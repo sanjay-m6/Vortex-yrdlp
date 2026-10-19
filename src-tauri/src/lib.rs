@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 use database::DbState;
 use downloader::manager::DownloadManager;
@@ -34,7 +34,7 @@ use process::ProcessManager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     logging::init_logger();
-    logging::log_info("System", "Vortex v1.1.0 initializing...");
+    logging::log_info("System", "Vortex v1.2.0 initializing...");
 
     let app_data_dir = dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -74,9 +74,11 @@ pub fn run() {
     };
 
     let engine = Arc::new(EngineManager::new());
+    let installer = Arc::new(crate::engine::ToolInstallManager::new());
     let process_manager = Arc::new(ProcessManager::new());
     let download_manager = Arc::new(DownloadManager::new(3));
     let playlist_manager = Arc::new(PlaylistAnalysisManager::new());
+    let update_manager = Arc::new(crate::updater::UpdateManager::new());
     let db_arc = Arc::new(db_state);
     let queue_manager = Arc::new(QueueManager::new(
         Arc::clone(&db_arc),
@@ -88,15 +90,18 @@ pub fn run() {
         cancel_handles: Arc::new(Mutex::new(HashMap::new())),
         db: db_arc,
         engine,
+        installer,
         process_manager,
         download_manager,
         queue_manager,
         playlist_manager,
+        update_manager,
     };
 
-    #[cfg(desktop)]
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
     let builder =
         tauri::Builder::default().plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            logging::log_info("Window", "Second instance launch detected; focusing existing primary window");
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.unminimize();
@@ -104,11 +109,12 @@ pub fn run() {
             }
         }));
 
-    #[cfg(not(desktop))]
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     let builder = tauri::Builder::default();
 
     let app = builder
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(app_state)
         .setup(|app| {
             let state = app.state::<AppState>();
@@ -119,8 +125,50 @@ pub fn run() {
                 queue_mgr.initialize_with_app(handle).await;
             });
 
+            // Asynchronous background update check (respecting frequency and settings)
+            let update_mgr = Arc::clone(&state.update_manager);
+            let state_clone = state.inner().clone();
+            let app_handle_for_update = app.handle().clone();
+
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+
+                let should_check = {
+                    if let Ok(conn) = state_clone.db.conn.lock() {
+                        let settings = crate::database::load_app_settings(&conn);
+                        if settings.auto_check_updates {
+                            crate::updater::is_check_due(&settings.check_frequency, settings.last_update_check.as_deref())
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                };
+
+                if should_check {
+                    logging::log_info("Updater", "Running automatic background update check...");
+                    let opts = crate::updater::UpdateCheckOptions::default();
+                    match update_mgr.check_for_update(&app_handle_for_update, &state_clone, opts).await {
+                        Ok(info) => {
+                            if info.has_update {
+                                logging::log_info("Updater", &format!("New update available: v{}", info.latest_version));
+                                let _ = app_handle_for_update.emit("update_available_notification", info);
+                            }
+                        }
+                        Err(e) => {
+                            logging::log_warn("Updater", &format!("Background update check error: {}", e));
+                        }
+                    }
+                }
+            });
+
+            if let Some(_window) = app.get_webview_window("main") {
+                logging::log_info("Window", "Primary application window 'main' verified and ready");
+            }
+
             // Set up System Tray (desktop only)
-            #[cfg(desktop)]
+            #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
             if let Some(icon) = app.default_window_icon() {
                 let _ = tauri::tray::TrayIconBuilder::new()
                     .icon(icon.clone())
@@ -145,7 +193,7 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            #[cfg(desktop)]
+            #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let app = window.app_handle();
                 let state = app.state::<AppState>();
@@ -229,6 +277,10 @@ pub fn run() {
             commands::history::clear_download_history,
             commands::settings::get_app_settings,
             commands::settings::update_app_settings,
+            commands::settings::get_setup_status,
+            commands::settings::save_setup_progress,
+            commands::settings::complete_setup_wizard,
+            commands::settings::reset_setup_wizard,
             // Phase 7 Presets & Advanced Settings commands
             commands::presets::get_presets,
             commands::presets::get_preset_by_id_cmd,
@@ -240,11 +292,16 @@ pub fn run() {
             commands::presets::validate_download_settings_cmd,
             commands::presets::preview_filename_template_cmd,
             commands::presets::resolve_output_directory_cmd,
-            // Phase 10 Production Logging & Updater commands
+            // Production Logging & Auto-Updater commands
             logging::get_diagnostics_report,
             logging::open_logs_directory,
             logging::read_recent_logs,
             updater::check_app_update,
+            updater::download_update,
+            updater::install_and_restart,
+            updater::get_update_state,
+            updater::get_update_preferences,
+            updater::save_update_preferences,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

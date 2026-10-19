@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Folder, Palette, Download, AppWindow, Sun, Moon, Laptop, Cpu } from "lucide-react";
+import { Folder, Palette, Download, AppWindow, Sun, Moon, Laptop, Cpu, RefreshCw } from "lucide-react";
 import { GlassCard } from "../components/glass/GlassCard";
 import { GlassButton } from "../components/glass/GlassButton";
 import { useSettingsStore, ThemeMode } from "../stores/settingsStore";
@@ -198,6 +198,158 @@ export const Settings: React.FC = () => {
               }}
               className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
             />
+          </div>
+        </div>
+      </GlassCard>
+
+      {/* 5. Software Updates Section */}
+      <GlassCard className="p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <RefreshCw className="w-3.5 h-3.5 text-indigo-500" />
+            <span>Automatic & Manual Updates</span>
+          </div>
+          <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
+            Official GitHub Releases
+          </span>
+        </div>
+
+        <div className="space-y-3.5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                Automatically check for updates
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Check GitHub Releases in the background for new versions
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              checked={useSettingsStore((s) => s.autoCheckUpdates)}
+              onChange={async (e) => {
+                await useSettingsStore.getState().updateAutoUpdatePreferences({ autoCheckUpdates: e.target.checked });
+                showToast("Update settings updated", "success");
+              }}
+              className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+            />
+          </div>
+
+          {useSettingsStore((s) => s.autoCheckUpdates) && (
+            <div className="flex items-center justify-between pt-2 border-t border-black/[0.06] dark:border-white/[0.06]">
+              <div>
+                <p className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                  Check frequency
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  How often Vortex contacts GitHub Releases for new updates
+                </p>
+              </div>
+              <select
+                value={useSettingsStore((s) => s.checkFrequency)}
+                onChange={async (e) => {
+                  await useSettingsStore.getState().updateAutoUpdatePreferences({
+                    checkFrequency: e.target.value as "startup" | "daily" | "weekly",
+                  });
+                  showToast("Check frequency updated", "success");
+                }}
+                className="text-xs rounded-xl bg-white/40 dark:bg-slate-950/40 border border-black/[0.08] dark:border-white/[0.08] px-3 py-1.5 text-slate-800 dark:text-slate-200 cursor-pointer focus:outline-hidden"
+              >
+                <option value="startup">On Application Startup</option>
+                <option value="daily">Once Daily</option>
+                <option value="weekly">Once Weekly</option>
+              </select>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between pt-2 border-t border-black/[0.06] dark:border-white/[0.06]">
+            <div>
+              <p className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                Notify when update is available
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Display an in-app banner or notification when a new version is released
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              checked={useSettingsStore((s) => s.notifyOnUpdate)}
+              onChange={async (e) => {
+                await useSettingsStore.getState().updateAutoUpdatePreferences({ notifyOnUpdate: e.target.checked });
+                showToast("Update settings updated", "success");
+              }}
+              className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+            />
+          </div>
+
+          <div className="flex items-center justify-between pt-2 border-t border-black/[0.06] dark:border-white/[0.06]">
+            <div>
+              <p className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                Include Pre-releases & Betas
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Check for experimental preview builds and beta release candidates
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              checked={useSettingsStore((s) => s.includePrereleases)}
+              onChange={async (e) => {
+                await useSettingsStore.getState().updateAutoUpdatePreferences({ includePrereleases: e.target.checked });
+                showToast("Update settings updated", "success");
+              }}
+              className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+            />
+          </div>
+
+          <div className="flex items-center justify-between pt-2 border-t border-black/[0.06] dark:border-white/[0.06]">
+            <div>
+              <p className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                Automatic Background Installation
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Download verified updates automatically (disabled by default; requires no active downloads)
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              checked={useSettingsStore((s) => s.autoInstallUpdates)}
+              onChange={async (e) => {
+                await useSettingsStore.getState().updateAutoUpdatePreferences({ autoInstallUpdates: e.target.checked });
+                showToast("Update settings updated", "success");
+              }}
+              className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+            />
+          </div>
+
+          <div className="flex items-center justify-between pt-3 border-t border-black/[0.06] dark:border-white/[0.06] text-xs">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">
+              Last checked:{" "}
+              {useSettingsStore((s) => s.lastUpdateCheck)
+                ? new Date(useSettingsStore.getState().lastUpdateCheck!).toLocaleString()
+                : "Never checked"}
+            </span>
+
+            <GlassButton
+              size="sm"
+              onClick={async () => {
+                try {
+                  const res = await api.checkAppUpdate({
+                    includePrereleases: useSettingsStore.getState().includePrereleases,
+                  });
+                  if (res.hasUpdate) {
+                    showToast(`Update available: v${res.latestVersion}! Visit About to install.`, "info");
+                  } else {
+                    showToast("Vortex is up to date!", "success");
+                  }
+                } catch (e: any) {
+                  showToast(e?.toString() || "Failed to check for updates", "error");
+                }
+              }}
+            >
+              <RefreshCw className="w-3 h-3 text-indigo-500" />
+              <span>Check for Updates Now</span>
+            </GlassButton>
           </div>
         </div>
       </GlassCard>

@@ -9,9 +9,26 @@ export interface SettingsState {
   askBeforeDownload: boolean;
   startWithSystem: boolean;
   minimizeToTray: boolean;
+  setupCompleted: boolean;
+  setupStep: number;
+  isInitialized: boolean;
+  autoCheckUpdates: boolean;
+  checkFrequency: "startup" | "daily" | "weekly";
+  notifyOnUpdate: boolean;
+  includePrereleases: boolean;
+  autoInstallUpdates: boolean;
+  lastUpdateCheck: string | null;
   init: () => Promise<void>;
   setTheme: (theme: ThemeMode) => void;
   updateSettings: (partial: Partial<SettingsState>) => void;
+  updateAutoUpdatePreferences: (partial: Partial<{
+    autoCheckUpdates: boolean;
+    checkFrequency: "startup" | "daily" | "weekly";
+    notifyOnUpdate: boolean;
+    includePrereleases: boolean;
+    autoInstallUpdates: boolean;
+  }>) => Promise<void>;
+  refreshSetupStatus: () => Promise<{ setupCompleted: boolean; setupStep: number; requiresSetup: boolean }>;
 }
 
 const STORAGE_KEY = "vortex_settings";
@@ -45,8 +62,46 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   askBeforeDownload: initial.askBeforeDownload ?? false,
   startWithSystem: initial.startWithSystem ?? false,
   minimizeToTray: initial.minimizeToTray ?? false,
+  setupCompleted: false,
+  setupStep: 1,
+  isInitialized: false,
+  autoCheckUpdates: true,
+  checkFrequency: "startup",
+  notifyOnUpdate: true,
+  includePrereleases: false,
+  autoInstallUpdates: false,
+  lastUpdateCheck: null,
 
   init: async () => {
+    try {
+      const appSettings = await api.getAppSettings();
+      if (appSettings.download_dir && (!get().downloadDirectory || get().downloadDirectory === "Downloads")) {
+        set({ downloadDirectory: appSettings.download_dir });
+      }
+      if (typeof appSettings.setup_completed === "boolean") {
+        set({
+          setupCompleted: appSettings.setup_completed,
+          setupStep: appSettings.setup_step || 1,
+        });
+      }
+    } catch (e) {
+      console.warn("Could not query backend settings from SQLite:", e);
+    }
+
+    try {
+      const updatePrefs = await api.getUpdatePreferences();
+      set({
+        autoCheckUpdates: updatePrefs.autoCheckUpdates,
+        checkFrequency: updatePrefs.checkFrequency,
+        notifyOnUpdate: updatePrefs.notifyOnUpdate,
+        includePrereleases: updatePrefs.includePrereleases,
+        autoInstallUpdates: updatePrefs.autoInstallUpdates,
+        lastUpdateCheck: updatePrefs.lastUpdateCheck,
+      });
+    } catch (e) {
+      console.warn("Could not query update preferences:", e);
+    }
+
     const current = get().downloadDirectory;
     if (!current || current === "Downloads") {
       try {
@@ -57,6 +112,26 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       } catch (e) {
         console.warn("Could not query default download directory:", e);
       }
+    }
+
+    set({ isInitialized: true });
+  },
+
+  refreshSetupStatus: async () => {
+    try {
+      const status = await api.getSetupStatus();
+      set({
+        setupCompleted: status.setupCompleted,
+        setupStep: status.setupStep,
+      });
+      return status;
+    } catch (e) {
+      console.warn("Could not fetch setup status:", e);
+      return {
+        setupCompleted: get().setupCompleted,
+        setupStep: get().setupStep,
+        requiresSetup: !get().setupCompleted,
+      };
     }
   },
 
@@ -73,4 +148,28 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       saveSettings(updated);
       return updated;
     }),
+
+  updateAutoUpdatePreferences: async (partial) => {
+    const current = {
+      autoCheckUpdates: partial.autoCheckUpdates ?? get().autoCheckUpdates,
+      checkFrequency: partial.checkFrequency ?? get().checkFrequency,
+      notifyOnUpdate: partial.notifyOnUpdate ?? get().notifyOnUpdate,
+      includePrereleases: partial.includePrereleases ?? get().includePrereleases,
+      autoInstallUpdates: partial.autoInstallUpdates ?? get().autoInstallUpdates,
+      lastUpdateCheck: get().lastUpdateCheck,
+    };
+    try {
+      await api.saveUpdatePreferences(current);
+      set({
+        autoCheckUpdates: current.autoCheckUpdates,
+        checkFrequency: current.checkFrequency,
+        notifyOnUpdate: current.notifyOnUpdate,
+        includePrereleases: current.includePrereleases,
+        autoInstallUpdates: current.autoInstallUpdates,
+      });
+    } catch (e) {
+      console.error("Failed to save update preferences:", e);
+      throw e;
+    }
+  },
 }));

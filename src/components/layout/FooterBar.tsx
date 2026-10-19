@@ -69,7 +69,7 @@ export const FooterBar: React.FC = () => {
       if (res.hasUpdate) {
         showToast(`Update available: v${res.latestVersion}`, "info");
       } else {
-        showToast("Vortex is up to date (v1.1.0)", "success");
+        showToast("Vortex is up to date (v1.2.0)", "success");
       }
     } catch (err: any) {
       showToast(err?.toString() || "Update check completed", "info");
@@ -215,7 +215,7 @@ export const FooterBar: React.FC = () => {
             className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] font-mono text-[10px] transition-colors cursor-pointer"
           >
             <Sparkles className={`w-2.5 h-2.5 text-amber-500 ${checkingUpdates ? "animate-spin" : ""}`} />
-            <span>v1.1.0</span>
+            <span>v1.2.0</span>
           </button>
         </div>
       </footer>

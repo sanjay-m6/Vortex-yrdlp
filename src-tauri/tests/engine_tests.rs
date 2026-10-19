@@ -2,10 +2,15 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use rusqlite::Connection;
+use vortex_lib::database::{init_db, load_app_settings, store_app_settings};
+use vortex_lib::engine::installer::ToolInstallManager;
 use vortex_lib::engine::resolver::ToolResolver;
 use vortex_lib::engine::version::ToolVersionChecker;
 use vortex_lib::engine::EngineManager;
-use vortex_lib::models::{EngineErrorKind, EngineStatus, ToolSource, ToolState, ToolStatus};
+use vortex_lib::models::{
+    AppSettings, EngineErrorKind, EngineStatus, ToolSource, ToolState, ToolStatus,
+};
 use vortex_lib::process::events::{
     sanitize_output_line, ProcessCancelledPayload, ProcessErrorPayload, ProcessExitedPayload,
     ProcessOutputPayload, ProcessStartedPayload,
@@ -366,3 +371,88 @@ fn test_tauri_command_response_serialization() {
     let deserialized: ToolStatus = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized, status);
 }
+
+// 11. Setup completion persistence in SQLite
+#[test]
+fn test_setup_completion_persistence() {
+    let conn = Connection::open_in_memory().expect("Failed to open test SQLite connection");
+    init_db(&conn).expect("Failed to initialize database schema");
+
+    // Default settings must not have setup completed
+    let initial = load_app_settings(&conn);
+    assert!(!initial.setup_completed);
+    assert_eq!(initial.setup_step, Some(1));
+
+    // Save setup progress to step 3
+    let mut updated = initial.clone();
+    updated.setup_step = Some(3);
+    store_app_settings(&conn, &updated).expect("Failed to store updated settings");
+
+    let progress_loaded = load_app_settings(&conn);
+    assert!(!progress_loaded.setup_completed);
+    assert_eq!(progress_loaded.setup_step, Some(3));
+
+    // Complete setup wizard
+    let mut completed = progress_loaded.clone();
+    completed.setup_completed = true;
+    completed.setup_step = Some(4);
+    store_app_settings(&conn, &completed).expect("Failed to store completed settings");
+
+    let final_loaded = load_app_settings(&conn);
+    assert!(final_loaded.setup_completed);
+    assert_eq!(final_loaded.setup_step, Some(4));
+}
+
+// 12. Setup settings backward compatibility with older configurations
+#[test]
+fn test_setup_settings_backward_compatibility() {
+    // Older versions without setup_completed or setup_step fields
+    let legacy_json = r#"{"download_dir":"/downloads","default_video_quality":"1080p","default_audio_format":"mp3","max_concurrent_downloads":3,"rate_limit_kbps":null,"custom_ytdlp_path":null,"custom_ffmpeg_path":null,"auto_remove_completed":false,"embed_metadata":true}"#;
+    let parsed: AppSettings = serde_json::from_str(legacy_json)
+        .expect("Failed to deserialize legacy AppSettings without setup fields");
+
+    assert!(!parsed.setup_completed);
+    assert_eq!(parsed.setup_step, None);
+    assert_eq!(parsed.download_dir, "/downloads");
+}
+
+// 13. ToolInstallManager concurrency locking prevents duplicate installer processes
+#[test]
+fn test_tool_install_manager_mutex_concurrency() {
+    let manager = ToolInstallManager::new();
+
+    // yt-dlp lock acquisition
+    let ytdlp_guard = manager.try_acquire_ytdlp_lock();
+    assert!(ytdlp_guard.is_ok(), "First acquire of yt-dlp lock should succeed");
+
+    // Second concurrent acquire must fail without running child process
+    let concurrent_ytdlp = manager.try_acquire_ytdlp_lock();
+    assert!(concurrent_ytdlp.is_err(), "Second concurrent acquire of yt-dlp lock must fail");
+
+    // Release lock
+    drop(ytdlp_guard);
+
+    // Re-acquire must succeed now
+    let retry_ytdlp = manager.try_acquire_ytdlp_lock();
+    assert!(retry_ytdlp.is_ok(), "Re-acquire of yt-dlp lock after release must succeed");
+
+    // FFmpeg lock acquisition
+    let ffmpeg_guard = manager.try_acquire_ffmpeg_lock();
+    assert!(ffmpeg_guard.is_ok(), "First acquire of FFmpeg lock should succeed");
+
+    let concurrent_ffmpeg = manager.try_acquire_ffmpeg_lock();
+    assert!(concurrent_ffmpeg.is_err(), "Second concurrent acquire of FFmpeg lock must fail");
+
+    drop(ffmpeg_guard);
+
+    let retry_ffmpeg = manager.try_acquire_ffmpeg_lock();
+    assert!(retry_ffmpeg.is_ok(), "Re-acquire of FFmpeg lock after release must succeed");
+}
+
+// 14. Path environment resolution without shell or popup
+#[test]
+fn test_path_environment_resolver_silent_nonexistent() {
+    let non_existent = ToolResolver::find_in_path("vortex_non_existent_binary_xyz_12345");
+    assert!(non_existent.is_none());
+}
+

@@ -51,13 +51,25 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   const [progressPayload, setProgressPayload] = useState<ToolDownloadProgressPayload | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
-  // Sync initialStep if it changes when reopened
+  // Sync initialStep only when modal transitions from closed to open
+  const prevIsOpenRef = React.useRef(isOpen);
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !prevIsOpenRef.current) {
       setStep(initialStep);
       setDownloadError(null);
     }
+    prevIsOpenRef.current = isOpen;
   }, [isOpen, initialStep]);
+
+  const goToStep = (nextStep: number) => {
+    setStep(nextStep);
+    api.saveSetupProgress(nextStep).catch(() => {});
+  };
+
+  const handleClose = () => {
+    api.saveSetupProgress(step).catch(() => {});
+    onClose();
+  };
 
   // Listen to download progress events from the backend
   useEffect(() => {
@@ -186,8 +198,14 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
     }
   };
 
-  const completeOnboarding = () => {
+  const completeOnboarding = async () => {
+    try {
+      await api.completeSetupWizard();
+    } catch (err) {
+      console.warn("Failed to complete setup wizard in backend SQLite:", err);
+    }
     localStorage.setItem("vortex_onboarding_completed", "true");
+    await refreshStatus(true);
     onClose();
   };
 
@@ -233,7 +251,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors cursor-pointer"
             title="Close Setup Wizard"
           >
@@ -251,7 +269,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
               <button
                 key={s.id}
                 type="button"
-                onClick={() => setStep(s.id)}
+                onClick={() => goToStep(s.id)}
                 className={cn(
                   "flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer",
                   isActive
@@ -337,7 +355,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
               <div className="pt-2 flex justify-end">
                 <button
                   type="button"
-                  onClick={() => setStep(2)}
+                  onClick={() => goToStep(2)}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold text-xs shadow-md shadow-indigo-500/25 active:scale-95 transition-all cursor-pointer"
                 >
                   <span>Continue to Engine Setup</span>
@@ -516,7 +534,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
               <div className="pt-2 flex items-center justify-between border-t border-black/[0.06] dark:border-white/[0.06]">
                 <button
                   type="button"
-                  onClick={() => setStep(1)}
+                  onClick={() => goToStep(1)}
                   className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors cursor-pointer"
                 >
                   Back
@@ -546,7 +564,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => setStep(3)}
+                    onClick={() => goToStep(3)}
                     className={cn(
                       "flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95",
                       allEnginesReady
@@ -636,14 +654,14 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
               <div className="pt-2 flex items-center justify-between border-t border-black/[0.06] dark:border-white/[0.06]">
                 <button
                   type="button"
-                  onClick={() => setStep(2)}
+                  onClick={() => goToStep(2)}
                   className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors cursor-pointer"
                 >
                   Back
                 </button>
                 <button
                   type="button"
-                  onClick={() => setStep(4)}
+                  onClick={() => goToStep(4)}
                   className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-bold shadow-md shadow-indigo-500/25 active:scale-95 transition-all cursor-pointer"
                 >
                   <span>Continue</span>

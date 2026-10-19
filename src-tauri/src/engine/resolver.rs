@@ -146,13 +146,79 @@ impl ToolResolver {
         None
     }
 
-    fn lookup_in_system(tool: ToolType) -> Option<PathBuf> {
+    /// Searches system PATH for a binary safely without spawning visible windows.
+    pub fn find_in_path(exe_name: &str) -> Option<PathBuf> {
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(paths) = std::env::var_os("PATH") {
+                let target_name = if !exe_name.to_lowercase().ends_with(".exe") {
+                    format!("{}.exe", exe_name)
+                } else {
+                    exe_name.to_string()
+                };
+
+                for dir in std::env::split_paths(&paths) {
+                    let candidate = dir.join(&target_name);
+                    if let Ok(valid) = Self::validate_executable(&candidate) {
+                        return Some(valid);
+                    }
+                }
+            }
+
+            use std::os::windows::process::CommandExt;
+            let mut cmd = std::process::Command::new("where.exe");
+            cmd.arg(exe_name);
+            cmd.creation_flags(0x08000000);
+            if let Ok(output) = cmd.output() {
+                if output.status.success() {
+                    let text = String::from_utf8_lossy(&output.stdout);
+                    for line in text.lines() {
+                        let candidate = PathBuf::from(line.trim());
+                        if let Ok(valid) = Self::validate_executable(&candidate) {
+                            return Some(valid);
+                        }
+                    }
+                }
+            }
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            if let Some(paths) = std::env::var_os("PATH") {
+                for dir in std::env::split_paths(&paths) {
+                    let candidate = dir.join(exe_name);
+                    if let Ok(valid) = Self::validate_executable(&candidate) {
+                        return Some(valid);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    pub fn lookup_in_system(tool: ToolType) -> Option<PathBuf> {
         let name = tool.as_str();
 
         #[cfg(target_os = "windows")]
         {
-            // Try where.exe
-            if let Ok(output) = std::process::Command::new("where.exe").arg(name).output() {
+            // First try direct in-memory PATH resolution (fast, no child process)
+            if let Some(paths) = std::env::var_os("PATH") {
+                let exe_name = tool.default_executable_name();
+                for dir in std::env::split_paths(&paths) {
+                    let candidate = dir.join(exe_name);
+                    if let Ok(valid) = Self::validate_executable(&candidate) {
+                        return Some(valid);
+                    }
+                }
+            }
+
+            // Fallback: where.exe with CREATE_NO_WINDOW (0x08000000)
+            use std::os::windows::process::CommandExt;
+            let mut cmd = std::process::Command::new("where.exe");
+            cmd.arg(name);
+            cmd.creation_flags(0x08000000);
+            if let Ok(output) = cmd.output() {
                 if output.status.success() {
                     let text = String::from_utf8_lossy(&output.stdout);
                     for line in text.lines() {

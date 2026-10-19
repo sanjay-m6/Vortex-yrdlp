@@ -39,3 +39,10 @@ bin/
 *.exe
 Downloads/
 src-tauri/Downloads/
+
+# Cryptographic Keys & Secrets
+*.key
+*.pem
+*.pub
+*.priv
+.tauri/

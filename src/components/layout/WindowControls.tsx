@@ -41,7 +41,7 @@ export const WindowControls: React.FC = () => {
           Vortex
         </span>
         <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 font-medium pointer-events-none">
-          v1.1.0
+          v1.2.0
         </span>
       </div>
 

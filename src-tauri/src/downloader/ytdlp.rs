@@ -62,16 +62,46 @@ pub fn resolve_ytdlp_path(custom_path: Option<&str>) -> Option<PathBuf> {
     }
 
     // Check PATH
-    if let Ok(output) = std::process::Command::new("where.exe")
-        .arg("yt-dlp")
-        .output()
+    #[cfg(target_os = "windows")]
     {
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            if let Some(first_line) = stdout.lines().next() {
-                let p = PathBuf::from(first_line.trim());
-                if p.exists() {
+        if let Some(paths) = std::env::var_os("PATH") {
+            for dir in std::env::split_paths(&paths) {
+                let p = dir.join("yt-dlp.exe");
+                if p.is_file() {
                     return Some(p);
+                }
+            }
+        }
+
+        use std::os::windows::process::CommandExt;
+        let mut cmd = std::process::Command::new("where.exe");
+        cmd.arg("yt-dlp");
+        cmd.creation_flags(0x08000000);
+        if let Ok(output) = cmd.output() {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                if let Some(first_line) = stdout.lines().next() {
+                    let p = PathBuf::from(first_line.trim());
+                    if p.exists() {
+                        return Some(p);
+                    }
+                }
+            }
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Ok(output) = std::process::Command::new("which")
+            .arg("yt-dlp")
+            .output()
+        {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                if let Some(first_line) = stdout.lines().next() {
+                    let p = PathBuf::from(first_line.trim());
+                    if p.exists() {
+                        return Some(p);
+                    }
                 }
             }
         }
@@ -94,16 +124,46 @@ pub fn resolve_ffmpeg_path(custom_path: Option<&str>) -> Option<PathBuf> {
         return Some(local_bin);
     }
 
-    if let Ok(output) = std::process::Command::new("where.exe")
-        .arg("ffmpeg")
-        .output()
+    #[cfg(target_os = "windows")]
     {
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            if let Some(first_line) = stdout.lines().next() {
-                let p = PathBuf::from(first_line.trim());
-                if p.exists() {
+        if let Some(paths) = std::env::var_os("PATH") {
+            for dir in std::env::split_paths(&paths) {
+                let p = dir.join("ffmpeg.exe");
+                if p.is_file() {
                     return Some(p);
+                }
+            }
+        }
+
+        use std::os::windows::process::CommandExt;
+        let mut cmd = std::process::Command::new("where.exe");
+        cmd.arg("ffmpeg");
+        cmd.creation_flags(0x08000000);
+        if let Ok(output) = cmd.output() {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                if let Some(first_line) = stdout.lines().next() {
+                    let p = PathBuf::from(first_line.trim());
+                    if p.exists() {
+                        return Some(p);
+                    }
+                }
+            }
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Ok(output) = std::process::Command::new("which")
+            .arg("ffmpeg")
+            .output()
+        {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                if let Some(first_line) = stdout.lines().next() {
+                    let p = PathBuf::from(first_line.trim());
+                    if p.exists() {
+                        return Some(p);
+                    }
                 }
             }
         }
@@ -121,11 +181,13 @@ pub async fn check_dependencies(
     let mut ytdlp_version = None;
 
     if let Some(ref path) = ytdlp_path {
-        if let Ok(output) = tokio::process::Command::new(path)
-            .arg("--version")
-            .output()
-            .await
+        let mut cmd = tokio::process::Command::new(path);
+        cmd.arg("--version");
+        #[cfg(target_os = "windows")]
         {
+            cmd.creation_flags(0x08000000);
+        }
+        if let Ok(output) = cmd.output().await {
             if output.status.success() {
                 ytdlp_installed = true;
                 ytdlp_version = Some(String::from_utf8_lossy(&output.stdout).trim().to_string());
@@ -138,11 +200,13 @@ pub async fn check_dependencies(
     let mut ffmpeg_version = None;
 
     if let Some(ref path) = ffmpeg_path {
-        if let Ok(output) = tokio::process::Command::new(path)
-            .arg("-version")
-            .output()
-            .await
+        let mut cmd = tokio::process::Command::new(path);
+        cmd.arg("-version");
+        #[cfg(target_os = "windows")]
         {
+            cmd.creation_flags(0x08000000);
+        }
+        if let Ok(output) = cmd.output().await {
             if output.status.success() {
                 ffmpeg_installed = true;
                 let text = String::from_utf8_lossy(&output.stdout);
@@ -167,13 +231,18 @@ pub async fn analyze_url(url: &str, custom_ytdlp: Option<String>) -> Result<Medi
     let ytdlp_bin = resolve_ytdlp_path(custom_ytdlp.as_deref())
         .ok_or_else(|| "yt-dlp executable was not found. Please install yt-dlp.".to_string())?;
 
-    let output = Command::new(&ytdlp_bin)
-        .args([
-            "--dump-single-json",
-            "--no-warnings",
-            "--flat-playlist",
-            url,
-        ])
+    let mut cmd = Command::new(&ytdlp_bin);
+    cmd.args([
+        "--dump-single-json",
+        "--no-warnings",
+        "--flat-playlist",
+        url,
+    ]);
+    #[cfg(target_os = "windows")]
+    {
+        cmd.creation_flags(0x08000000);
+    }
+    let output = cmd
         .output()
         .await
         .map_err(|e| format!("Failed to execute yt-dlp: {}", e))?;

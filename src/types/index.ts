@@ -108,6 +108,16 @@ export interface AppSettings {
   custom_ffmpeg_path: string | null;
   auto_remove_completed: boolean;
   embed_metadata: boolean;
+  setup_completed?: boolean;
+  setup_step?: number | null;
+}
+
+export interface SetupStatus {
+  setupCompleted: boolean;
+  setupStep: number;
+  requiresSetup: boolean;
+  ytdlpReady: boolean;
+  ffmpegReady: boolean;
 }
 
 export * from "./queue";
@@ -130,6 +140,18 @@ export interface SystemDiagnosticReport {
   recentLogs: string[];
 }
 
+export type UpdateState =
+  | "idle"
+  | "checking"
+  | "up_to_date"
+  | "update_available"
+  | "downloading"
+  | "verifying"
+  | "ready_to_install"
+  | "installing"
+  | "restart_required"
+  | "failed";
+
 export interface AppUpdateInfo {
   currentVersion: string;
   latestVersion: string;
@@ -140,6 +162,30 @@ export interface AppUpdateInfo {
   downloadUrl: string | null;
   signatureVerified: boolean;
   statusMessage: string;
+  state: UpdateState;
+  errorMessage?: string | null;
+}
+
+export interface UpdateProgressPayload {
+  stage: string;
+  percentage: number;
+  downloadedBytes: number;
+  totalBytes: number | null;
+  message: string;
+}
+
+export interface UpdateCheckOptions {
+  includePrereleases?: boolean;
+  force?: boolean;
+}
+
+export interface UpdatePreferences {
+  autoCheckUpdates: boolean;
+  checkFrequency: "startup" | "daily" | "weekly";
+  notifyOnUpdate: boolean;
+  includePrereleases: boolean;
+  autoInstallUpdates: boolean;
+  lastUpdateCheck: string | null;
 }
 
 export interface ToolDownloadProgressPayload {

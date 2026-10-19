@@ -101,6 +101,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           args: ${{ matrix.args }}
           tagName: ''
@@ -110,13 +112,17 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist-artifacts | Out-Null
-          Get-ChildItem -Path "src-tauri/target/release/bundle/nsis/*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
+          Get-ChildItem -Path "src-tauri/target/release/bundle/nsis/*" -Include "*.exe","*.zip","*.sig" -ErrorAction SilentlyContinue | ForEach-Object {
             Copy-Item -Path $_.FullName -Destination "dist-artifacts/"
-            Write-Host "Collected Windows NSIS installer: $($_.Name)"
+            Write-Host "Collected Windows NSIS installer / updater: $($_.Name)"
           }
-          Get-ChildItem -Path "src-tauri/target/release/bundle/msi/*.msi" -ErrorAction SilentlyContinue | ForEach-Object {
+          Get-ChildItem -Path "src-tauri/target/release/bundle/msi/*" -Include "*.msi","*.zip","*.sig" -ErrorAction SilentlyContinue | ForEach-Object {
             Copy-Item -Path $_.FullName -Destination "dist-artifacts/"
-            Write-Host "Collected Windows MSI package: $($_.Name)"
+            Write-Host "Collected Windows MSI package / updater: $($_.Name)"
+          }
+          Get-ChildItem -Path "src-tauri/target/release/bundle/updater/*" -ErrorAction SilentlyContinue | ForEach-Object {
+            Copy-Item -Path $_.FullName -Destination "dist-artifacts/"
+            Write-Host "Collected updater manifest / artifact: $($_.Name)"
           }
 
       - name: Organize Desktop Release Artifacts (Linux)
@@ -125,6 +131,7 @@ jobs:
           mkdir -p dist-artifacts
           find src-tauri/target/release/bundle/deb/ -name "*.deb" -exec cp {} dist-artifacts/ \; 2>/dev/null || true
           find src-tauri/target/release/bundle/appimage/ -name "*.AppImage" -exec cp {} dist-artifacts/ \; 2>/dev/null || true
+          find src-tauri/target/release/bundle/updater/ -type f -exec cp {} dist-artifacts/ \; 2>/dev/null || true
           ls -la dist-artifacts/
 
       - name: Organize Desktop Release Artifacts (macOS)
@@ -132,6 +139,7 @@ jobs:
         run: |
           mkdir -p dist-artifacts
           find src-tauri/target/release/bundle/dmg/ -name "*.dmg" -exec cp {} dist-artifacts/ \; 2>/dev/null || true
+          find src-tauri/target/release/bundle/updater/ -type f -exec cp {} dist-artifacts/ \; 2>/dev/null || true
           ls -la dist-artifacts/
 
       - name: Upload ${{ matrix.platform_name }} Artifacts

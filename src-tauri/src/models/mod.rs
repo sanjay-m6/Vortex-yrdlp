@@ -122,6 +122,14 @@ pub struct HistoryItem {
     pub status: String,
 }
 
+fn default_true() -> bool {
+    true
+}
+
+fn default_check_frequency() -> String {
+    "daily".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     pub download_dir: String,
@@ -133,6 +141,22 @@ pub struct AppSettings {
     pub custom_ffmpeg_path: Option<String>,
     pub auto_remove_completed: bool,
     pub embed_metadata: bool,
+    #[serde(default)]
+    pub setup_completed: bool,
+    #[serde(default)]
+    pub setup_step: Option<u32>,
+    #[serde(default = "default_true")]
+    pub auto_check_updates: bool,
+    #[serde(default = "default_check_frequency")]
+    pub check_frequency: String,
+    #[serde(default = "default_true")]
+    pub notify_on_update: bool,
+    #[serde(default)]
+    pub include_prereleases: bool,
+    #[serde(default)]
+    pub auto_install_updates: bool,
+    #[serde(default)]
+    pub last_update_check: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -151,6 +175,14 @@ impl Default for AppSettings {
             custom_ffmpeg_path: None,
             auto_remove_completed: false,
             embed_metadata: true,
+            setup_completed: false,
+            setup_step: Some(1),
+            auto_check_updates: true,
+            check_frequency: "daily".to_string(),
+            notify_on_update: true,
+            include_prereleases: false,
+            auto_install_updates: false,
+            last_update_check: None,
         }
     }
 }

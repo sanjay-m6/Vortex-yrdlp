@@ -11,6 +11,7 @@ import { useTheme } from "./hooks/useTheme";
 import { useSettingsStore } from "./stores/settingsStore";
 import { useDownloadStore } from "./stores/downloadStore";
 import { useEngineStore } from "./stores/engineStore";
+import { useAppStore } from "./stores/appStore";
 import { OnboardingModal } from "./components/onboarding/OnboardingModal";
 import { api } from "./lib/api";
 
@@ -22,11 +23,17 @@ export function App() {
   const initDownloads = useDownloadStore((s) => s.init);
   const refreshEngine = useEngineStore((s) => s.refreshStatus);
   const engineStatus = useEngineStore((s) => s.status);
+  const showToast = useAppStore((s) => s.showToast);
 
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(1);
 
+  const hasInitializedRef = React.useRef(false);
+
   useEffect(() => {
+    if (hasInitializedRef.current) return;
+    hasInitializedRef.current = true;
+
     initSettings();
     initDownloads();
     refreshEngine();
@@ -34,26 +41,33 @@ export function App() {
     // Reveal window smoothly after mounting to eliminate any white pop
     api.appShowWindow().catch(() => {});
 
-    // Check if first-time user or if onboarding not completed
-    const completed = localStorage.getItem("vortex_onboarding_completed");
-    if (completed !== "true") {
-      setOnboardingStep(1);
-      setOnboardingOpen(true);
-    }
+    // Check single source of truth for setup status from backend SQLite
+    const checkSetupStatus = async () => {
+      try {
+        const setupStatus = await api.getSetupStatus();
+        const legacyCompleted = localStorage.getItem("vortex_onboarding_completed") === "true";
+
+        if (legacyCompleted && setupStatus.requiresSetup) {
+          // Sync legacy completion to backend SQLite
+          await api.completeSetupWizard().catch(() => {});
+        } else if (setupStatus.requiresSetup) {
+          setOnboardingStep(setupStatus.setupStep || 1);
+          setOnboardingOpen(true);
+        }
+      } catch (err) {
+        console.warn("Failed to check backend setup status, falling back to local storage:", err);
+        const completed = localStorage.getItem("vortex_onboarding_completed");
+        if (completed !== "true") {
+          setOnboardingStep(1);
+          setOnboardingOpen(true);
+        }
+      }
+    };
+
+    checkSetupStatus();
   }, [initSettings, initDownloads, refreshEngine]);
 
-  // If engine check completes and yt-dlp is missing, prompt onboarding step 2
-  useEffect(() => {
-    if (engineStatus && !engineStatus.ytdlp.available) {
-      const completed = localStorage.getItem("vortex_onboarding_completed");
-      if (completed !== "true") {
-        setOnboardingStep(2);
-        setOnboardingOpen(true);
-      }
-    }
-  }, [engineStatus]);
-
-  // Global listener for "open_onboarding" custom events
+  // Global listener for "open_onboarding" custom events (e.g. from Settings or Header)
   useEffect(() => {
     const handleOpen = (e: Event) => {
       const custom = e as CustomEvent<{ step?: number }>;
@@ -64,6 +78,23 @@ export function App() {
     window.addEventListener("open_onboarding", handleOpen);
     return () => window.removeEventListener("open_onboarding", handleOpen);
   }, []);
+
+  // Background update notification listener
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    api.onUpdateAvailableNotification((payload) => {
+      showToast(
+        `Vortex update v${payload.latestVersion} is available! Visit Settings / About to download and install.`,
+        "info"
+      );
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [showToast]);
 
   return (
     <>
