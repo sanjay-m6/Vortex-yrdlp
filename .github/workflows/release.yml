@@ -201,7 +201,6 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           args: ${{ matrix.args }}
-          tagName: ''
 
       - name: Stage Release Artifacts (Windows)
         if: runner.os == 'Windows'
@@ -292,7 +291,8 @@ jobs:
       - name: Verify Android Gradle Permissions
         run: |
           if [ ! -d "src-tauri/gen/android" ]; then
-            npx tauri android init --ci --skip-targets-install
+            echo "Android project not initialized. Running tauri android init..."
+            npm run tauri -- android init
           fi
           if [ -f "src-tauri/gen/android/gradlew" ]; then
             chmod +x src-tauri/gen/android/gradlew
@@ -300,7 +300,7 @@ jobs:
 
       - name: Build Android APK
         run: |
-          npm run tauri android build -- --ci --apk
+          npm run tauri -- android build --apk
 
       - name: Stage Android Release Artifacts
         run: |
