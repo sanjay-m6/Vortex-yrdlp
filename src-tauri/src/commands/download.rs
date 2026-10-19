@@ -330,10 +330,17 @@ pub async fn open_download_folder(path: String, state: State<'_, AppState>) -> R
 
 #[command]
 pub async fn choose_download_directory() -> Result<Option<String>, String> {
-    let folder = rfd::AsyncFileDialog::new()
-        .set_title("Select Download Directory")
-        .pick_folder()
-        .await;
+    #[cfg(not(target_os = "android"))]
+    {
+        let folder = rfd::AsyncFileDialog::new()
+            .set_title("Select Download Directory")
+            .pick_folder()
+            .await;
 
-    Ok(folder.map(|f| f.path().to_string_lossy().to_string()))
+        Ok(folder.map(|f| f.path().to_string_lossy().to_string()))
+    }
+    #[cfg(target_os = "android")]
+    {
+        Ok(None)
+    }
 }

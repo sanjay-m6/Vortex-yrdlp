@@ -126,33 +126,42 @@ pub async fn pick_tool_executable(
 ) -> Result<Option<String>, String> {
     let tool_type = parse_tool_type(&tool)?;
 
-    #[cfg(target_os = "windows")]
-    let dialog = {
-        let filter_name = match tool_type {
-            ToolType::YtDlp => "yt-dlp Executable",
-            ToolType::Ffmpeg => "FFmpeg Executable",
-            ToolType::Ffprobe => "FFprobe Executable",
+    #[cfg(not(target_os = "android"))]
+    {
+        #[cfg(target_os = "windows")]
+        let dialog = {
+            let filter_name = match tool_type {
+                ToolType::YtDlp => "yt-dlp Executable",
+                ToolType::Ffmpeg => "FFmpeg Executable",
+                ToolType::Ffprobe => "FFprobe Executable",
+            };
+            rfd::AsyncFileDialog::new()
+                .set_title(format!("Select {}", tool_type.as_str()))
+                .add_filter(filter_name, &["exe", "cmd", "bat"])
         };
-        rfd::AsyncFileDialog::new()
-            .set_title(format!("Select {}", tool_type.as_str()))
-            .add_filter(filter_name, &["exe", "cmd", "bat"])
-    };
 
-    #[cfg(not(target_os = "windows"))]
-    let dialog = rfd::AsyncFileDialog::new().set_title(format!("Select {}", tool_type.as_str()));
+        #[cfg(not(target_os = "windows"))]
+        let dialog =
+            rfd::AsyncFileDialog::new().set_title(format!("Select {}", tool_type.as_str()));
 
-    let file = dialog.pick_file().await;
+        let file = dialog.pick_file().await;
 
-    if let Some(f) = file {
-        let path_str = f.path().to_string_lossy().to_string();
-        let validation = state.engine.validate_tool_path(tool_type, &path_str).await;
-        if !validation.valid {
-            return Err(validation
-                .error
-                .unwrap_or_else(|| "Selected file is not valid".to_string()));
+        if let Some(f) = file {
+            let path_str = f.path().to_string_lossy().to_string();
+            let validation = state.engine.validate_tool_path(tool_type, &path_str).await;
+            if !validation.valid {
+                return Err(validation
+                    .error
+                    .unwrap_or_else(|| "Selected file is not valid".to_string()));
+            }
+            Ok(Some(path_str))
+        } else {
+            Ok(None)
         }
-        Ok(Some(path_str))
-    } else {
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = state;
         Ok(None)
     }
 }

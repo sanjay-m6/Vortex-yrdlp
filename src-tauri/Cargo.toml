@@ -24,12 +24,14 @@ dirs = "5"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 open = "5"
-rfd = "0.15"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
 tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2.14"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 futures-util = "0.3.34"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+rfd = "0.15"
 
 [profile.release]
 codegen-units = 1

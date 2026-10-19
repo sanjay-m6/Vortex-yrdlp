@@ -25,27 +25,35 @@ pub async fn import_batch_file(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Option<BatchValidationResult>, String> {
-    let file = rfd::AsyncFileDialog::new()
-        .set_title("Select Text File with Media URLs")
-        .add_filter("Text Files", &["txt", "list", "urls"])
-        .pick_file()
-        .await;
+    #[cfg(not(target_os = "android"))]
+    {
+        let file = rfd::AsyncFileDialog::new()
+            .set_title("Select Text File with Media URLs")
+            .add_filter("Text Files", &["txt", "list", "urls"])
+            .pick_file()
+            .await;
 
-    let handle = match file {
-        Some(h) => h,
-        None => return Ok(None),
-    };
+        let handle = match file {
+            Some(h) => h,
+            None => return Ok(None),
+        };
 
-    let bytes = handle.read().await;
-    // Limit to 5MB
-    if bytes.len() > 5 * 1024 * 1024 {
-        return Err("Imported file is too large (maximum 5MB)".to_string());
+        let bytes = handle.read().await;
+        // Limit to 5MB
+        if bytes.len() > 5 * 1024 * 1024 {
+            return Err("Imported file is too large (maximum 5MB)".to_string());
+        }
+
+        let text = String::from_utf8_lossy(&bytes);
+        let result = validate_and_deduplicate_batch(&text, Some(&state.db));
+        let _ = app.emit(EVENT_BATCH_VALIDATION_COMPLETED, &result);
+        Ok(Some(result))
     }
-
-    let text = String::from_utf8_lossy(&bytes);
-    let result = validate_and_deduplicate_batch(&text, Some(&state.db));
-    let _ = app.emit(EVENT_BATCH_VALIDATION_COMPLETED, &result);
-    Ok(Some(result))
+    #[cfg(target_os = "android")]
+    {
+        let _ = (app, state);
+        Ok(None)
+    }
 }
 
 #[command]
